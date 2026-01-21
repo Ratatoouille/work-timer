@@ -6,148 +6,181 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+type Mode int
+
+const (
+	ModeVim Mode = iota
+	ModeInsert
+)
+
 type Break struct {
-	from string
-	to   string
+	from textinput.Model
+	to   textinput.Model
 }
 
 type model struct {
-	startTime string
-	workTime  string
+	mode      Mode
+	startTime textinput.Model
+	workTime  textinput.Model
 	breaks    []Break
-
-	cursor  int
-	editing bool
-	input   string
-
-	result string
-	err    string
+	cursor    int
+	result    string
+	err       string
 }
 
 func initialModel() model {
+	start := textinput.New()
+	start.Placeholder = "чч:мм"
+	start.Focus()
+
+	work := textinput.New()
+	work.Placeholder = "чч:мм"
+
 	return model{
-		breaks: []Break{},
+		mode:      ModeInsert,
+		startTime: start,
+		workTime:  work,
+		breaks:    []Break{},
+		cursor:    0,
 	}
 }
 
-func (m model) Init() tea.Cmd { return nil }
+func (m model) Init() tea.Cmd {
+	return textinput.Blink
+}
+
+func (m *model) recalc() {
+	start, err1 := parseClock(m.startTime.Value())
+	work, err2 := parseDuration(m.workTime.Value())
+	if err1 != nil || err2 != nil {
+		m.err = "Неверный формат времени"
+		m.result = ""
+		return
+	}
+
+	totalBreak := time.Duration(0)
+	for _, br := range m.breaks {
+		f, err1 := parseClock(br.from.Value())
+		t, err2 := parseClock(br.to.Value())
+		if err1 != nil || err2 != nil {
+			m.err = "Неверный формат перерыва"
+			m.result = ""
+			return
+		}
+		totalBreak += t.Sub(f)
+	}
+
+	end := start.Add(work).Add(totalBreak)
+	m.result = end.Format("15:04")
+	m.err = ""
+}
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
+		switch m.mode {
 
-		case "ctrl+c", "q":
-			return m, tea.Quit
-
-		// ---------- navigation ----------
-		case "up":
-			if !m.editing && m.cursor > 0 {
-				m.cursor--
-			}
-
-		case "down":
-			if !m.editing && m.cursor < m.fieldCount()-1 {
-				m.cursor++
-			}
-
-		// ---------- edit mode ----------
-		case "enter":
-			if !m.editing {
-				m.editing = true
-				m.input = m.getFieldValue(m.cursor)
-			} else {
-				m.setFieldValue(m.cursor, m.input)
-				m.editing = false
-				m.input = ""
-				m.recalc()
-			}
-
-		case "esc":
-			m.editing = false
-			m.input = ""
-
-		case "backspace":
-			if m.editing && len(m.input) > 0 {
-				m.input = m.input[:len(m.input)-1]
-			}
-
-		default:
-			if m.editing && len(msg.String()) == 1 {
-				m.input += msg.String()
-			}
-
-		// ---------- breaks ----------
-		case "a":
-			if !m.editing {
-				m.breaks = append(m.breaks, Break{})
-				m.recalc()
-			}
-
-		case "d":
-			if !m.editing {
+		case ModeVim:
+			switch msg.String() {
+			case "i":
+				m.mode = ModeInsert
+				if m.cursor == 0 {
+					m.startTime.Focus()
+				} else if m.cursor == 1 {
+					m.workTime.Focus()
+				} else {
+					idx := (m.cursor - 2) / 2
+					if (m.cursor-2)%2 == 0 {
+						m.breaks[idx].from.Focus()
+					} else {
+						m.breaks[idx].to.Focus()
+					}
+				}
+			case "j":
+				if m.cursor < m.fieldCount()-1 {
+					m.cursor++
+				}
+			case "k":
+				if m.cursor > 0 {
+					m.cursor--
+				}
+			case "a":
+				// добавить перерыв
+				br1 := textinput.New()
+				br1.Placeholder = "чч:мм"
+				br2 := textinput.New()
+				br2.Placeholder = "чч:мм"
+				m.breaks = append(m.breaks, Break{from: br1, to: br2})
+			case "d":
 				idx, ok := m.cursorBreakIndex()
 				if ok {
 					m.breaks = append(m.breaks[:idx], m.breaks[idx+1:]...)
-					if m.cursor > 0 {
+					if m.cursor > 1 {
 						m.cursor--
 					}
-					m.recalc()
 				}
+			}
+
+		case ModeInsert:
+			var cmd tea.Cmd
+			if m.cursor == 0 {
+				m.startTime, cmd = m.startTime.Update(msg)
+			} else if m.cursor == 1 {
+				m.workTime, cmd = m.workTime.Update(msg)
+			} else {
+				idx := (m.cursor - 2) / 2
+				if (m.cursor-2)%2 == 0 {
+					m.breaks[idx].from, cmd = m.breaks[idx].from.Update(msg)
+				} else {
+					m.breaks[idx].to, cmd = m.breaks[idx].to.Update(msg)
+				}
+			}
+			cmds = append(cmds, cmd)
+			if msg.String() == "esc" {
+				m.mode = ModeVim
 			}
 		}
 	}
 
-	return m, nil
-}
-
-func (m *model) recalc() {
-	end, err := calcEndTime(m.startTime, m.workTime, m.breaks)
-	if err != nil {
-		m.err = err.Error()
-		m.result = ""
-		return
-	}
-	m.err = ""
-	m.result = end
+	m.recalc()
+	return m, tea.Batch(cmds...)
 }
 
 func (m model) View() string {
 	var b strings.Builder
 
-	b.WriteString("🕒 Рабочее время\n\n")
-
-	draw := func(i int, label, value string) {
-		cursor := "   "
-		if i == m.cursor {
-			cursor = "👉 "
-		}
-		if m.editing && i == m.cursor {
-			b.WriteString(fmt.Sprintf("%s%s: %s_\n", cursor, label, m.input))
-		} else {
-			b.WriteString(fmt.Sprintf("%s%s: %s\n", cursor, label, value))
-		}
+	modeStr := "Insert"
+	if m.mode == ModeVim {
+		modeStr = "Vim"
 	}
 
-	i := 0
-	draw(i, "Начало", m.startTime)
-	i++
-	draw(i, "Работать", m.workTime)
-	i++
+	b.WriteString(fmt.Sprintf("🕒 Режим: %s\n\n", modeStr))
+
+	cursor := func(i int) string {
+		if i == m.cursor && m.mode == ModeVim {
+			return "👉 "
+		}
+		return "   "
+	}
+
+	b.WriteString(cursor(0) + "Начало: " + m.startTime.View() + "\n")
+	b.WriteString(cursor(1) + "Рабочее время: " + m.workTime.View() + "\n")
 
 	for n, br := range m.breaks {
-		draw(i, fmt.Sprintf("Перерыв %d — ушёл", n+1), br.from)
-		i++
-		draw(i, fmt.Sprintf("Перерыв %d — вернулся", n+1), br.to)
-		i++
+		b.WriteString(cursor(2+n*2) + fmt.Sprintf("Перерыв %d — ушёл: %s\n", n+1, br.from.View()))
+		b.WriteString(cursor(3+n*2) + fmt.Sprintf("Перерыв %d — вернулся: %s\n", n+1, br.to.View()))
 	}
 
-	b.WriteString("\n⬆⬇ — навигация   Enter — редактировать\n")
-	b.WriteString("a — добавить перерыв   d — удалить\n")
-	b.WriteString("Esc — отмена   q — выход\n\n")
+	b.WriteString("\nИнструкции:\n")
+	b.WriteString("Vim: j/k перемещение, i — редактирование, a — добавить перерыв, d — удалить\n")
+	b.WriteString("Insert: редактирование, Esc — вернуться в Vim\n")
+	b.WriteString("q — выход\n\n")
 
 	if m.err != "" {
 		b.WriteString("❌ " + m.err + "\n")
@@ -165,41 +198,6 @@ func (m model) fieldCount() int {
 	return 2 + len(m.breaks)*2
 }
 
-func (m model) getFieldValue(i int) string {
-	if i == 0 {
-		return m.startTime
-	}
-	if i == 1 {
-		return m.workTime
-	}
-
-	i -= 2
-	br := i / 2
-	if i%2 == 0 {
-		return m.breaks[br].from
-	}
-	return m.breaks[br].to
-}
-
-func (m *model) setFieldValue(i int, v string) {
-	if i == 0 {
-		m.startTime = v
-		return
-	}
-	if i == 1 {
-		m.workTime = v
-		return
-	}
-
-	i -= 2
-	br := i / 2
-	if i%2 == 0 {
-		m.breaks[br].from = v
-	} else {
-		m.breaks[br].to = v
-	}
-}
-
 func (m model) cursorBreakIndex() (int, bool) {
 	if m.cursor < 2 {
 		return 0, false
@@ -208,30 +206,6 @@ func (m model) cursorBreakIndex() (int, bool) {
 }
 
 /* ---------- time logic ---------- */
-
-func calcEndTime(start, work string, breaks []Break) (string, error) {
-	st, err := parseClock(start)
-	if err != nil {
-		return "", fmt.Errorf("начало")
-	}
-	w, err := parseDuration(work)
-	if err != nil {
-		return "", fmt.Errorf("рабочее время")
-	}
-
-	totalBreak := time.Duration(0)
-	for _, br := range breaks {
-		if br.from == "" || br.to == "" {
-			continue
-		}
-		f, _ := parseClock(br.from)
-		t, _ := parseClock(br.to)
-		totalBreak += t.Sub(f)
-	}
-
-	end := st.Add(w).Add(totalBreak)
-	return end.Format("15:04"), nil
-}
 
 func parseClock(v string) (time.Time, error) {
 	p := strings.Split(v, ":")
