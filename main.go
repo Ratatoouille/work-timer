@@ -14,7 +14,7 @@ import (
 type Mode int
 
 const (
-	ModeVim Mode = iota
+	ModeNormal Mode = iota
 	ModeInsert
 )
 
@@ -71,7 +71,7 @@ func initialModel() model {
 	plan.Placeholder = "чч:мм"
 
 	return model{
-		mode:      ModeVim,
+		mode:      ModeNormal,
 		startTime: start,
 		workTime:  work,
 		worked:    worked,
@@ -94,7 +94,6 @@ func (m *model) recalc() {
 	var remain time.Duration
 	if m.workTime.Value() != "" {
 		remain, err = parseDuration(m.workTime.Value())
-
 		if err != nil {
 			m.err = "Неверное оставшееся время"
 			m.result = ""
@@ -176,7 +175,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		switch m.mode {
-		case ModeVim:
+		case ModeNormal:
 			switch msg.String() {
 			case "i":
 				m.mode = ModeInsert
@@ -246,7 +245,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 
 			if msg.String() == "esc" {
-				m.mode = ModeVim
+				m.mode = ModeNormal
 
 				m.blurAll()
 				m.focusCurrent()
@@ -296,8 +295,6 @@ func (m model) renderCheckbox(index int, label string) string {
 		box = "[x]"
 	}
 
-	content := label + " " + box
-
 	style := fieldInactiveStyle
 	if m.cursor == index {
 		style = fieldActiveStyle
@@ -305,8 +302,8 @@ func (m model) renderCheckbox(index int, label string) string {
 
 	return lipgloss.JoinHorizontal(
 		lipgloss.Left,
-		labelStyle.Render(""),
-		style.Render(content),
+		labelStyle.Render(label), // текст в лейбл
+		style.Render(box),        // только чекбокс в поле
 	)
 }
 
@@ -384,8 +381,7 @@ var (
 
 	helpBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			Padding(1, 2).
-			Width(60)
+			Padding(1, 2)
 )
 
 func (m model) View() string {
@@ -396,8 +392,8 @@ func (m model) View() string {
 	var body strings.Builder
 
 	modeStr := "INSERT"
-	if m.mode == ModeVim {
-		modeStr = "VIM"
+	if m.mode == ModeNormal {
+		modeStr = "NORMAL"
 	}
 
 	// HEADER
@@ -458,7 +454,7 @@ func (m model) View() string {
 func (m model) viewHelp() string {
 	help := `🛠 Комбинации клавиш
 
-Vim-режим:
+Normal-режим:
   j/k или ↑/↓  — перемещение
   i            — Insert режим
   a            — добавить перерыв
@@ -466,7 +462,7 @@ Vim-режим:
 
 Insert-режим:
   ввод текста
-  Esc          — обратно в Vim
+  Esc          — обратно в Normal
 
 Общие:
   ?            — показать/скрыть help
@@ -475,14 +471,7 @@ Insert-режим:
 Формат времени: чч:мм
 `
 
-	box := helpBoxStyle.Render(help)
-
-	return lipgloss.Place(
-		80, 24, // можно потом заменить на size окна
-		lipgloss.Left,
-		lipgloss.Left,
-		box,
-	)
+	return helpBoxStyle.Render(help)
 }
 
 /* ---------- helpers ---------- */
