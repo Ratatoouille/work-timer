@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type Mode int
@@ -36,6 +37,7 @@ type model struct {
 	workTime  textinput.Model // оставшееся рабочее время (чч:мм)
 	worked    textinput.Model // уже отработано (чч:мм)
 	plan      textinput.Model // сколько должно быть отработано (чч:мм)
+	addFour   bool
 
 	breaks []Break
 
@@ -69,7 +71,7 @@ func initialModel() model {
 	plan.Placeholder = "чч:мм"
 
 	return model{
-		mode:      ModeInsert,
+		mode:      ModeVim,
 		startTime: start,
 		workTime:  work,
 		worked:    worked,
@@ -141,7 +143,15 @@ func (m *model) recalc() {
 	}
 
 	end := start.Add(remain).Add(totalBreak)
-	m.result = end.Format("15:04")
+
+	if m.addFour {
+		end = end.Add(4 * time.Hour)
+
+		m.result = end.Format("15:04") + " KRSK"
+	} else {
+		m.result = end.Format("15:04")
+	}
+
 	m.err = ""
 }
 
@@ -206,6 +216,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.cursor--
 					}
 				}
+			case " ":
+				if m.cursor == 4 {
+					m.addFour = !m.addFour
+				}
 			}
 		case ModeInsert:
 			var cmd tea.Cmd
@@ -263,6 +277,39 @@ func (m *model) blurAll() {
 	}
 }
 
+func (m model) renderField(index int, label string, input textinput.Model) string {
+	style := fieldInactiveStyle
+	if m.cursor == index {
+		style = fieldActiveStyle
+	}
+
+	return lipgloss.JoinHorizontal(
+		lipgloss.Left,
+		labelStyle.Render(label),
+		style.Render(input.View()),
+	)
+}
+
+func (m model) renderCheckbox(index int, label string) string {
+	box := "[ ]"
+	if m.addFour {
+		box = "[x]"
+	}
+
+	content := label + " " + box
+
+	style := fieldInactiveStyle
+	if m.cursor == index {
+		style = fieldActiveStyle
+	}
+
+	return lipgloss.JoinHorizontal(
+		lipgloss.Left,
+		labelStyle.Render(""),
+		style.Render(content),
+	)
+}
+
 func (m *model) focusCurrent() {
 	// Снимаем фокус со всех полей
 	m.startTime.Blur()
@@ -275,87 +322,172 @@ func (m *model) focusCurrent() {
 		br.to.Blur()
 	}
 
-	// Ставим фокус только на текущее поле
-	switch m.cursor {
-	case 0:
+	// Ставим фокус только на текущее поле (textinput)
+	switch {
+	case m.cursor == 0:
 		m.startTime.Focus()
-	case 1:
+	case m.cursor == 1:
 		m.workTime.Focus()
-	case 2:
+	case m.cursor == 2:
 		m.worked.Focus()
-	case 3:
+	case m.cursor == 3:
 		m.plan.Focus()
 	default:
-		idx := (m.cursor - 4) / 2
+		// Только если cursor >= 5 (breaks), чтобы не попасть на чекбокс
+		if m.cursor >= 5 {
+			idx := (m.cursor - 4) / 2
 
-		if (m.cursor-4)%2 == 0 {
-			m.breaks[idx].from.Focus()
-		} else {
-			m.breaks[idx].to.Focus()
+			if idx < len(m.breaks) {
+				if (m.cursor-4)%2 == 0 {
+					m.breaks[idx].from.Focus()
+				} else {
+					m.breaks[idx].to.Focus()
+				}
+			}
 		}
 	}
 }
+
+var (
+	fieldBoxStyle = lipgloss.NewStyle().
+			Padding(0, 1)
+
+	fieldActiveStyle = fieldBoxStyle.Copy().
+				Border(lipgloss.NormalBorder()).
+				BorderForeground(lipgloss.Color("8"))
+
+	fieldInactiveStyle = fieldBoxStyle.Copy()
+
+	resultBoxStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			Padding(1, 2).
+			MarginTop(1)
+
+	box = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		Padding(0, 1)
+
+	headerStyle = lipgloss.NewStyle().
+			Bold(true)
+
+	labelStyle = lipgloss.NewStyle().
+			Width(22)
+
+	resultStyle = lipgloss.NewStyle().
+			Bold(true)
+
+	errorStyle = lipgloss.NewStyle().
+			Bold(true)
+
+	statusBarStyle = lipgloss.NewStyle().
+			Padding(0, 1)
+
+	helpBoxStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			Padding(1, 2).
+			Width(60)
+)
 
 func (m model) View() string {
 	if m.help == HelpVisible {
 		return m.viewHelp()
 	}
 
-	var b strings.Builder
+	var body strings.Builder
 
-	modeStr := "Insert"
+	modeStr := "INSERT"
 	if m.mode == ModeVim {
-		modeStr = "Vim"
+		modeStr = "VIM"
 	}
 
-	b.WriteString(fmt.Sprintf("🕒 Режим: %s\n? — помощь   q — выход\n\n", modeStr))
-	b.WriteString(fmt.Sprintf("Начало: %s\n", m.startTime.View()))
-	b.WriteString(fmt.Sprintf("Оставшееся время: %s\n", m.workTime.View()))
-	b.WriteString(fmt.Sprintf("Отработано: %s\n", m.worked.View()))
-	b.WriteString(fmt.Sprintf("План: %s\n", m.plan.View()))
+	// HEADER
+	header := headerStyle.Render("🕒 Work Timer")
+	status := statusBarStyle.Render(
+		fmt.Sprintf(" mode: %s | ? help | q quit ", modeStr),
+	)
 
+	body.WriteString(header + "\n")
+	body.WriteString(status + "\n\n")
+
+	// MAIN FIELDS
+	body.WriteString(
+		m.renderField(0, "Начало:", m.startTime) + "\n",
+	)
+	body.WriteString(
+		m.renderField(1, "Оставшееся время:", m.workTime) + "\n",
+	)
+	body.WriteString(
+		m.renderField(2, "Отработано:", m.worked) + "\n",
+	)
+	body.WriteString(
+		m.renderField(3, "План:", m.plan) + "\n\n",
+	)
+	body.WriteString(
+		m.renderCheckbox(4, "Добавить +4 часа") + "\n\n",
+	)
+
+	// BREAKS
 	for n, br := range m.breaks {
-		b.WriteString(fmt.Sprintf("Перерыв %d — ушёл: %s\n", n+1, br.from.View()))
-		b.WriteString(fmt.Sprintf("Перерыв %d — вернулся: %s\n", n+1, br.to.View()))
+		body.WriteString(
+			m.renderField(4+n*2, fmt.Sprintf("Перерыв %d — ушёл:", n+1), br.from) + "\n",
+		)
+		body.WriteString(
+			m.renderField(5+n*2, fmt.Sprintf("Перерыв %d — вернулся:", n+1), br.to) + "\n",
+		)
 	}
 
+	// RESULT / ERROR
 	if m.err != "" {
-		b.WriteString("❌ " + m.err + "\n")
-	}
-	if m.result != "" {
-		b.WriteString("✅ Время окончания: " + m.result + "\n")
+		body.WriteString("\n" + errorStyle.Render("❌ "+m.err) + "\n")
 	}
 
-	return b.String()
+	if m.result != "" {
+		body.WriteString(
+			resultBoxStyle.Render(
+				resultStyle.Render("⏰ Время окончания: " + m.result),
+			),
+		)
+	}
+
+	// FOOTER
+	body.WriteString("\n[j/k ↑/↓] перемещение   [i] ввод   [esc] normal\n")
+
+	return box.Render(body.String())
 }
 
 func (m model) viewHelp() string {
-	help := `
-🛠 Комбинации клавиш
+	help := `🛠 Комбинации клавиш
 
 Vim-режим:
-  j/k или стрелки вверх/вниз — перемещение
-  i — перейти в Insert режим (редактирование)
-  a — добавить перерыв
-  d — удалить текущий перерыв
+  j/k или ↑/↓  — перемещение
+  i            — Insert режим
+  a            — добавить перерыв
+  d            — удалить перерыв
 
 Insert-режим:
-  редактирование полей
-  Esc — вернуться в Vim режим
+  ввод текста
+  Esc          — обратно в Vim
 
 Общие:
-  ? — показать/скрыть эту подсказку
-  q — выйти
+  ?            — показать/скрыть help
+  q            — выход
 
-Формат времени всегда чч:мм
+Формат времени: чч:мм
 `
-	return help
+
+	box := helpBoxStyle.Render(help)
+
+	return lipgloss.Place(
+		80, 24, // можно потом заменить на size окна
+		lipgloss.Left,
+		lipgloss.Left,
+		box,
+	)
 }
 
 /* ---------- helpers ---------- */
-
 func (m model) fieldCount() int {
-	return 4 + len(m.breaks)*2
+	return 5 + len(m.breaks)*2 // +1 чекбокс
 }
 
 func (m model) cursorBreakIndex() (int, bool) {
