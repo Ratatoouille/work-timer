@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -25,6 +27,20 @@ const (
 	HelpVisible
 )
 
+type SaveData struct {
+	StartTime string      `json:"start_time"`
+	WorkTime  string      `json:"work_time"`
+	Worked    string      `json:"worked"`
+	Plan      string      `json:"plan"`
+	AddFour   bool        `json:"add_four"`
+	Breaks    []BreakData `json:"breaks"`
+}
+
+type BreakData struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+
 type Break struct {
 	from textinput.Model
 	to   textinput.Model
@@ -33,17 +49,17 @@ type Break struct {
 type model struct {
 	mode Mode
 
-	startTime textinput.Model
-	workTime  textinput.Model // оставшееся рабочее время (чч:мм)
-	worked    textinput.Model // уже отработано (чч:мм)
-	plan      textinput.Model // сколько должно быть отработано (чч:мм)
-	addFour   bool
+	startTime textinput.Model // время начала рабочего дня
+	workTime  textinput.Model // оставшееся рабочее время
+	worked    textinput.Model // уже отработано
+	plan      textinput.Model // сколько должно быть отработано
+	addFour   bool            // добавить 4 часа к результату
+	breaks    []Break         // перерывы
 
-	breaks []Break
-
-	cursor int
-	result string
-	err    string
+	cursor   int
+	result   string
+	err      string
+	saveFile string
 
 	help HelpState
 }
@@ -52,7 +68,7 @@ func (m model) Init() tea.Cmd {
 	return textinput.Blink
 }
 
-func initialModel() model {
+func initialModel(saveFile string) model {
 	start := textinput.New()
 	start.Placeholder = "чч:мм"
 	start.Width = 5
@@ -70,7 +86,7 @@ func initialModel() model {
 	plan.Width = 5
 	plan.Placeholder = "чч:мм"
 
-	return model{
+	m := model{
 		mode:      ModeNormal,
 		startTime: start,
 		workTime:  work,
@@ -79,6 +95,84 @@ func initialModel() model {
 		breaks:    []Break{},
 		cursor:    0,
 		help:      HelpHidden,
+		saveFile:  saveFile,
+	}
+
+	if saveFile != "" {
+		m.loadFromFile()
+	}
+
+	return m
+}
+
+func (m *model) saveToFile() error {
+	if m.saveFile == "" {
+		return fmt.Errorf("не указан файл для сохранения")
+	}
+
+	data := SaveData{
+		StartTime: m.startTime.Value(),
+		WorkTime:  m.workTime.Value(),
+		Worked:    m.worked.Value(),
+		Plan:      m.plan.Value(),
+		AddFour:   m.addFour,
+		Breaks:    []BreakData{},
+	}
+
+	for _, br := range m.breaks {
+		data.Breaks = append(data.Breaks, BreakData{
+			From: br.from.Value(),
+			To:   br.to.Value(),
+		})
+	}
+
+	jsonData, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(m.saveFile, jsonData, 0o644)
+}
+
+func (m *model) loadFromFile() {
+	if m.saveFile == "" {
+		return
+	}
+
+	data, err := os.ReadFile(m.saveFile)
+	if err != nil {
+		return
+	}
+
+	var saveData SaveData
+	if err := json.Unmarshal(data, &saveData); err != nil {
+		m.err = "Ошибка чтения файла"
+
+		return
+	}
+
+	m.startTime.SetValue(saveData.StartTime)
+	m.workTime.SetValue(saveData.WorkTime)
+	m.worked.SetValue(saveData.Worked)
+	m.plan.SetValue(saveData.Plan)
+	m.addFour = saveData.AddFour
+
+	m.breaks = []Break{}
+
+	for _, bd := range saveData.Breaks {
+		br1 := textinput.New()
+		br1.Placeholder = "чч:мм"
+		br1.Width = 5
+		br1.SetValue(bd.From)
+		br1.Blur()
+
+		br2 := textinput.New()
+		br2.Width = 5
+		br2.Placeholder = "чч:мм"
+		br2.SetValue(bd.To)
+		br2.Blur()
+
+		m.breaks = append(m.breaks, Break{from: br1, to: br2})
 	}
 }
 
@@ -92,6 +186,7 @@ func (m *model) recalc() {
 	}
 
 	var remain time.Duration
+
 	if m.workTime.Value() != "" {
 		remain, err = parseDuration(m.workTime.Value())
 		if err != nil {
@@ -135,6 +230,7 @@ func (m *model) recalc() {
 		if err1 != nil || err2 != nil {
 			m.err = "Неверный формат перерыва"
 			m.result = ""
+
 			return
 		}
 
@@ -167,6 +263,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.help = HelpVisible
 			} else {
 				m.help = HelpHidden
+			}
+		case "ctrl+s":
+			if err := m.saveToFile(); err != nil {
+				m.err = "Ошибка сохранения: " + err.Error()
 			}
 		}
 
@@ -233,9 +333,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case 3:
 				m.plan, cmd = m.plan.Update(msg)
 			default:
-				idx := (m.cursor - 5) / 2 // Изменено с (m.cursor - 4) на (m.cursor - 5)
+				idx := (m.cursor - 5) / 2
 
-				if (m.cursor-5)%2 == 0 { // Изменено с (m.cursor - 4) на (m.cursor - 5)
+				if (m.cursor-5)%2 == 0 {
 					m.breaks[idx].from, cmd = m.breaks[idx].from.Update(msg)
 				} else {
 					m.breaks[idx].to, cmd = m.breaks[idx].to.Update(msg)
@@ -265,7 +365,7 @@ func (m *model) blurAll() {
 
 	for i := range fields {
 		fields[i].Blur()
-		fields[i].CursorEnd() // сброс позиции курсора
+		fields[i].CursorEnd()
 	}
 
 	for i := range m.breaks {
@@ -302,13 +402,12 @@ func (m model) renderCheckbox(index int, label string) string {
 
 	return lipgloss.JoinHorizontal(
 		lipgloss.Left,
-		labelStyle.Render(label), // текст в лейбл
-		style.Render(box),        // только чекбокс в поле
+		labelStyle.Render(label),
+		style.Render(box),
 	)
 }
 
 func (m *model) focusCurrent() {
-	// Снимаем фокус со всех полей
 	m.startTime.Blur()
 	m.workTime.Blur()
 	m.worked.Blur()
@@ -319,7 +418,6 @@ func (m *model) focusCurrent() {
 		m.breaks[i].to.Blur()
 	}
 
-	// Ставим фокус только на текущее поле (textinput)
 	switch {
 	case m.cursor == 0:
 		m.startTime.Focus()
@@ -330,10 +428,8 @@ func (m *model) focusCurrent() {
 	case m.cursor == 3:
 		m.plan.Focus()
 	case m.cursor == 4:
-		// Чекбокс — не ставим фокус ни на что
 		return
 	default:
-		// Для перерывов: cursor >= 5
 		idx := (m.cursor - 5) / 2
 
 		if idx < len(m.breaks) {
@@ -350,11 +446,11 @@ var (
 	fieldBoxStyle = lipgloss.NewStyle().
 			Padding(0, 1)
 
-	fieldActiveStyle = fieldBoxStyle.Copy().
+	fieldActiveStyle = fieldBoxStyle.
 				Border(lipgloss.RoundedBorder()).
 				BorderForeground(lipgloss.Color("8"))
 
-	fieldInactiveStyle = fieldBoxStyle.Copy()
+	fieldInactiveStyle = fieldBoxStyle
 
 	resultBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
@@ -406,16 +502,18 @@ func (m model) View() string {
 		modeStr = "NORMAL"
 	}
 
-	// HEADER
 	header := headerStyle.Render("🕒 Work Timer")
-	status := statusBarStyle.Render(
-		fmt.Sprintf(" %s │ ? help │ q quit ", modeStr),
-	)
+	statusText := fmt.Sprintf(" %s │ ? help │ q quit", modeStr)
+
+	if m.saveFile != "" {
+		statusText += fmt.Sprintf(" │ ctrl+s save to %s", m.saveFile)
+	}
+
+	status := statusBarStyle.Render(statusText)
 
 	body.WriteString(header + "\n")
 	body.WriteString(status + "\n")
 
-	// MAIN FIELDS
 	body.WriteString(sectionStyle.Render("━━━ Основные параметры ━━━") + "\n")
 	body.WriteString(
 		m.renderField(0, "Начало:", m.startTime) + "\n",
@@ -430,12 +528,12 @@ func (m model) View() string {
 		m.renderField(3, "План:", m.plan) + "\n",
 	)
 	body.WriteString(
-		m.renderCheckbox(4, "Добавить +4 часа к результату") + "\n",
+		m.renderCheckbox(4, "Добавить +4 часа") + "\n",
 	)
 
-	// BREAKS
 	if len(m.breaks) > 0 {
 		body.WriteString("\n" + sectionStyle.Render("━━━ Перерывы ━━━") + "\n")
+
 		for n, br := range m.breaks {
 			body.WriteString(
 				m.renderField(5+n*2, fmt.Sprintf("Перерыв %d — ушёл:", n+1), br.from) + "\n",
@@ -443,14 +541,13 @@ func (m model) View() string {
 			body.WriteString(
 				m.renderField(6+n*2, fmt.Sprintf("Перерыв %d — вернулся:", n+1), br.to) + "\n",
 			)
-			// Разделитель между перерывами
+
 			if n < len(m.breaks)-1 {
 				body.WriteString("\n")
 			}
 		}
 	}
 
-	// RESULT / ERROR
 	if m.err != "" {
 		body.WriteString("\n" + errorStyle.Render("❌ "+m.err) + "\n")
 	}
@@ -463,7 +560,6 @@ func (m model) View() string {
 		)
 	}
 
-	// FOOTER
 	body.WriteString("\n\n" + statusBarStyle.Render("[j/k ↑↓] nav  [i] edit  [a] add  [d] del  [space] toggle  [esc] normal") + "\n")
 
 	return box.Render(body.String())
@@ -477,6 +573,7 @@ Normal-режим:
   i            — Insert режим
   a            — добавить перерыв
   d            — удалить перерыв
+  space        — toggle чекбокс
 
 Insert-режим:
   ввод текста
@@ -484,33 +581,35 @@ Insert-режим:
 
 Общие:
   ?            — показать/скрыть help
+  Ctrl+S       — сохранить в файл
   q            — выход
 
 Формат времени: чч:мм
+
+Использование:
+  ./program              - запуск без сохранения
+  ./program data.json    - загрузка/сохранение в data.json
 `
 
 	return helpBoxStyle.Render(help)
 }
 
-/* ---------- helpers ---------- */
 func (m model) fieldCount() int {
-	return 5 + len(m.breaks)*2 // +1 чекбокс
+	return 5 + len(m.breaks)*2
 }
 
 func (m model) cursorBreakIndex() (int, bool) {
-	if m.cursor < 5 { // Изменено с 4 на 5
+	if m.cursor < 5 {
 		return 0, false
 	}
 
-	return (m.cursor - 5) / 2, true // Изменено с (m.cursor - 4) на (m.cursor - 5)
+	return (m.cursor - 5) / 2, true
 }
-
-/* ---------- time logic ---------- */
 
 func parseClock(v string) (time.Time, error) {
 	p := strings.Split(v, ":")
 	if len(p) != 2 {
-		return time.Time{}, fmt.Errorf("bad")
+		return time.Time{}, fmt.Errorf("bad clock")
 	}
 
 	h, _ := strconv.Atoi(p[0])
@@ -522,7 +621,7 @@ func parseClock(v string) (time.Time, error) {
 func parseDuration(v string) (time.Duration, error) {
 	p := strings.Split(v, ":")
 	if len(p) != 2 {
-		return 0, fmt.Errorf("bad")
+		return 0, fmt.Errorf("bad duration")
 	}
 
 	h, _ := strconv.Atoi(p[0])
@@ -532,7 +631,12 @@ func parseDuration(v string) (time.Duration, error) {
 }
 
 func main() {
-	p := tea.NewProgram(initialModel())
+	saveFile := ""
+	if len(os.Args) > 1 {
+		saveFile = os.Args[1]
+	}
+
+	p := tea.NewProgram(initialModel(saveFile))
 
 	if _, err := p.Run(); err != nil {
 		panic(err)
