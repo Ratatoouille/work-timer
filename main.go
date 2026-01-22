@@ -233,9 +233,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case 3:
 				m.plan, cmd = m.plan.Update(msg)
 			default:
-				idx := (m.cursor - 4) / 2
+				idx := (m.cursor - 5) / 2 // Изменено с (m.cursor - 4) на (m.cursor - 5)
 
-				if (m.cursor-4)%2 == 0 {
+				if (m.cursor-5)%2 == 0 { // Изменено с (m.cursor - 4) на (m.cursor - 5)
 					m.breaks[idx].from, cmd = m.breaks[idx].from.Update(msg)
 				} else {
 					m.breaks[idx].to, cmd = m.breaks[idx].to.Update(msg)
@@ -314,9 +314,9 @@ func (m *model) focusCurrent() {
 	m.worked.Blur()
 	m.plan.Blur()
 
-	for _, br := range m.breaks {
-		br.from.Blur()
-		br.to.Blur()
+	for i := range m.breaks {
+		m.breaks[i].from.Blur()
+		m.breaks[i].to.Blur()
 	}
 
 	// Ставим фокус только на текущее поле (textinput)
@@ -329,17 +329,18 @@ func (m *model) focusCurrent() {
 		m.worked.Focus()
 	case m.cursor == 3:
 		m.plan.Focus()
+	case m.cursor == 4:
+		// Чекбокс — не ставим фокус ни на что
+		return
 	default:
-		// Только если cursor >= 5 (breaks), чтобы не попасть на чекбокс
-		if m.cursor >= 5 {
-			idx := (m.cursor - 4) / 2
+		// Для перерывов: cursor >= 5
+		idx := (m.cursor - 5) / 2
 
-			if idx < len(m.breaks) {
-				if (m.cursor-4)%2 == 0 {
-					m.breaks[idx].from.Focus()
-				} else {
-					m.breaks[idx].to.Focus()
-				}
+		if idx < len(m.breaks) {
+			if (m.cursor-5)%2 == 0 {
+				m.breaks[idx].from.Focus()
+			} else {
+				m.breaks[idx].to.Focus()
 			}
 		}
 	}
@@ -350,7 +351,7 @@ var (
 			Padding(0, 1)
 
 	fieldActiveStyle = fieldBoxStyle.Copy().
-				Border(lipgloss.NormalBorder()).
+				Border(lipgloss.RoundedBorder()).
 				BorderForeground(lipgloss.Color("8"))
 
 	fieldInactiveStyle = fieldBoxStyle.Copy()
@@ -362,26 +363,35 @@ var (
 
 	box = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		Padding(0, 1)
+		Padding(1, 2)
 
 	headerStyle = lipgloss.NewStyle().
-			Bold(true)
+			Bold(true).
+			MarginBottom(1)
 
 	labelStyle = lipgloss.NewStyle().
-			Width(22)
+			Width(22).
+			Italic(true)
 
 	resultStyle = lipgloss.NewStyle().
-			Bold(true)
+			Bold(true).
+			Underline(true)
 
 	errorStyle = lipgloss.NewStyle().
-			Bold(true)
+			Bold(true).
+			Italic(true)
 
 	statusBarStyle = lipgloss.NewStyle().
-			Padding(0, 1)
+			Padding(0, 1).
+			MarginBottom(1)
 
 	helpBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			Padding(1, 2)
+
+	sectionStyle = lipgloss.NewStyle().
+			MarginTop(1).
+			MarginBottom(1)
 )
 
 func (m model) View() string {
@@ -399,13 +409,14 @@ func (m model) View() string {
 	// HEADER
 	header := headerStyle.Render("🕒 Work Timer")
 	status := statusBarStyle.Render(
-		fmt.Sprintf(" mode: %s | ? help | q quit ", modeStr),
+		fmt.Sprintf(" %s │ ? help │ q quit ", modeStr),
 	)
 
 	body.WriteString(header + "\n")
-	body.WriteString(status + "\n\n")
+	body.WriteString(status + "\n")
 
 	// MAIN FIELDS
+	body.WriteString(sectionStyle.Render("━━━ Основные параметры ━━━") + "\n")
 	body.WriteString(
 		m.renderField(0, "Начало:", m.startTime) + "\n",
 	)
@@ -416,20 +427,27 @@ func (m model) View() string {
 		m.renderField(2, "Отработано:", m.worked) + "\n",
 	)
 	body.WriteString(
-		m.renderField(3, "План:", m.plan) + "\n\n",
+		m.renderField(3, "План:", m.plan) + "\n",
 	)
 	body.WriteString(
-		m.renderCheckbox(4, "Добавить +4 часа") + "\n\n",
+		m.renderCheckbox(4, "Добавить +4 часа к результату") + "\n",
 	)
 
 	// BREAKS
-	for n, br := range m.breaks {
-		body.WriteString(
-			m.renderField(4+n*2, fmt.Sprintf("Перерыв %d — ушёл:", n+1), br.from) + "\n",
-		)
-		body.WriteString(
-			m.renderField(5+n*2, fmt.Sprintf("Перерыв %d — вернулся:", n+1), br.to) + "\n",
-		)
+	if len(m.breaks) > 0 {
+		body.WriteString("\n" + sectionStyle.Render("━━━ Перерывы ━━━") + "\n")
+		for n, br := range m.breaks {
+			body.WriteString(
+				m.renderField(5+n*2, fmt.Sprintf("Перерыв %d — ушёл:", n+1), br.from) + "\n",
+			)
+			body.WriteString(
+				m.renderField(6+n*2, fmt.Sprintf("Перерыв %d — вернулся:", n+1), br.to) + "\n",
+			)
+			// Разделитель между перерывами
+			if n < len(m.breaks)-1 {
+				body.WriteString("\n")
+			}
+		}
 	}
 
 	// RESULT / ERROR
@@ -438,15 +456,15 @@ func (m model) View() string {
 	}
 
 	if m.result != "" {
-		body.WriteString(
+		body.WriteString("\n" +
 			resultBoxStyle.Render(
-				resultStyle.Render("⏰ Время окончания: " + m.result),
+				resultStyle.Render("⏰ Время окончания: "+m.result),
 			),
 		)
 	}
 
 	// FOOTER
-	body.WriteString("\n[j/k ↑/↓] перемещение   [i] ввод   [esc] normal\n")
+	body.WriteString("\n\n" + statusBarStyle.Render("[j/k ↑↓] nav  [i] edit  [a] add  [d] del  [space] toggle  [esc] normal") + "\n")
 
 	return box.Render(body.String())
 }
@@ -480,11 +498,11 @@ func (m model) fieldCount() int {
 }
 
 func (m model) cursorBreakIndex() (int, bool) {
-	if m.cursor < 4 {
+	if m.cursor < 5 { // Изменено с 4 на 5
 		return 0, false
 	}
 
-	return (m.cursor - 4) / 2, true
+	return (m.cursor - 5) / 2, true // Изменено с (m.cursor - 4) на (m.cursor - 5)
 }
 
 /* ---------- time logic ---------- */
