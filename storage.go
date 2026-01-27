@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
 type Storage struct {
@@ -33,6 +34,13 @@ func (s *Storage) Save(data SaveData) error {
 		return fmt.Errorf("не указан файл для сохранения")
 	}
 
+	dir := filepath.Dir(s.filePath)
+	if dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return fmt.Errorf("ошибка создания директории: %w", err)
+		}
+	}
+
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return fmt.Errorf("ошибка сериализации: %w", err)
@@ -54,6 +62,9 @@ func (s *Storage) Load() (SaveData, error) {
 
 	fileData, err := os.ReadFile(s.filePath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return data, fmt.Errorf("файл не найден: %s", s.filePath)
+		}
 		return data, fmt.Errorf("ошибка чтения файла: %w", err)
 	}
 

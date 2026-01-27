@@ -1,6 +1,10 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
+
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -10,6 +14,8 @@ type Mode int
 const (
 	ModeNormal Mode = iota
 	ModeInsert
+	ModeSavePrompt
+	ModeLoadPrompt
 )
 
 type HelpState int
@@ -42,6 +48,10 @@ type Model struct {
 	addFour   bool
 	breaks    []Break
 
+	// File operation fields
+	filePathInput textinput.Model
+	statusMessage string
+
 	// Calculation results
 	result string
 	err    string
@@ -57,18 +67,30 @@ type Break struct {
 }
 
 func NewModel(saveFile string) Model {
+	fileInput := textinput.New()
+	fileInput.Placeholder = "путь/к/файлу.json"
+	fileInput.Width = 40
+
+	// Конвертируем путь в абсолютный, если он передан
+	if saveFile != "" {
+		if absPath, err := toAbsolutePath(saveFile); err == nil {
+			saveFile = absPath
+		}
+	}
+
 	m := Model{
-		mode:       ModeNormal,
-		helpState:  HelpHidden,
-		cursor:     0,
-		saveFile:   saveFile,
-		startTime:  createTimeInput(),
-		workTime:   createTimeInput(),
-		worked:     createTimeInput(),
-		plan:       createTimeInput(),
-		breaks:     []Break{},
-		storage:    NewStorage(saveFile),
-		calculator: NewCalculator(),
+		mode:          ModeNormal,
+		helpState:     HelpHidden,
+		cursor:        0,
+		saveFile:      saveFile,
+		startTime:     createTimeInput(),
+		workTime:      createTimeInput(),
+		worked:        createTimeInput(),
+		plan:          createTimeInput(),
+		breaks:        []Break{},
+		filePathInput: fileInput,
+		storage:       NewStorage(saveFile),
+		calculator:    NewCalculator(),
 	}
 
 	m.startTime.Focus()
@@ -83,7 +105,7 @@ func NewModel(saveFile string) Model {
 func createTimeInput() textinput.Model {
 	ti := textinput.New()
 	ti.Placeholder = "чч:мм"
-	ti.Width = 5
+	ti.Width = 6
 
 	return ti
 }
@@ -99,17 +121,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	// Global hotkeys
-	switch keyMsg.String() {
-	case "q":
-		return m, tea.Quit
-	case "?":
-		m.helpState = toggleHelpState(m.helpState)
-
-		return m, nil
-	case "ctrl+s":
-		m.saveState()
-
-		return m, nil
+	if m.mode != ModeSavePrompt && m.mode != ModeLoadPrompt {
+		switch keyMsg.String() {
+		case "q":
+			return m, tea.Quit
+		case "?":
+			m.helpState = toggleHelpState(m.helpState)
+			return m, nil
+		case "ctrl+s":
+			if m.saveFile != "" {
+				m.saveState()
+			} else {
+				m.enterSaveMode()
+			}
+			return m, nil
+		case "ctrl+o":
+			m.enterLoadMode()
+			return m, nil
+		}
 	}
 
 	// Help screen handling
@@ -124,10 +153,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m, cmd = m.updateNormalMode(keyMsg)
 	case ModeInsert:
 		m, cmd = m.updateInsertMode(keyMsg)
+	case ModeSavePrompt:
+		m, cmd = m.updateSavePrompt(keyMsg)
+	case ModeLoadPrompt:
+		m, cmd = m.updateLoadPrompt(keyMsg)
 	}
 
 	m.recalculate()
-
 	return m, cmd
 }
 
@@ -153,6 +185,16 @@ func (m Model) updateNormalMode(msg tea.KeyMsg) (Model, tea.Cmd) {
 		if m.cursor == FieldAddFour {
 			m.addFour = !m.addFour
 		}
+
+	case "s":
+		if m.saveFile != "" {
+			m.saveState()
+		} else {
+			m.enterSaveMode()
+		}
+
+	case "o":
+		m.enterLoadMode()
 	}
 
 	return m, nil
@@ -161,15 +203,12 @@ func (m Model) updateNormalMode(msg tea.KeyMsg) (Model, tea.Cmd) {
 func (m Model) updateInsertMode(msg tea.KeyMsg) (Model, tea.Cmd) {
 	if msg.String() == "esc" {
 		m.mode = ModeNormal
-
 		m.blurAll()
 		m.focusCurrent()
-
 		return m, nil
 	}
 
 	var cmd tea.Cmd
-
 	field := m.getCurrentField()
 	if field != nil {
 		*field, cmd = field.Update(msg)
@@ -178,9 +217,97 @@ func (m Model) updateInsertMode(msg tea.KeyMsg) (Model, tea.Cmd) {
 	return m, cmd
 }
 
+func (m Model) updateSavePrompt(msg tea.KeyMsg) (Model, tea.Cmd) {
+	var cmd tea.Cmd
+
+	switch msg.String() {
+	case "enter":
+		filePath := m.filePathInput.Value()
+		if filePath != "" {
+			absPath, err := toAbsolutePath(filePath)
+			if err != nil {
+				m.statusMessage = "❌ Ошибка пути: " + err.Error()
+				// НЕ выходим из режима, чтобы можно было исправить путь
+				return m, nil
+			}
+			m.saveFile = absPath
+			m.storage = NewStorage(absPath)
+			m.saveState()
+
+			// Выходим только если сохранение прошло успешно
+			if strings.HasPrefix(m.statusMessage, "✅") {
+				m.exitFileMode()
+			}
+		}
+		return m, nil
+
+	case "esc":
+		m.statusMessage = "Сохранение отменено"
+		m.exitFileMode()
+		return m, nil
+	}
+
+	m.filePathInput, cmd = m.filePathInput.Update(msg)
+	return m, cmd
+}
+
+func (m Model) updateLoadPrompt(msg tea.KeyMsg) (Model, tea.Cmd) {
+	var cmd tea.Cmd
+
+	switch msg.String() {
+	case "enter":
+		filePath := m.filePathInput.Value()
+		if filePath != "" {
+			absPath, err := toAbsolutePath(filePath)
+			if err != nil {
+				m.statusMessage = "❌ Ошибка пути: " + err.Error()
+				// НЕ выходим из режима, чтобы можно было исправить путь
+				return m, nil
+			}
+			m.saveFile = absPath
+			m.storage = NewStorage(absPath)
+			m.loadState()
+
+			// Выходим только если загрузка прошла успешно
+			if strings.HasPrefix(m.statusMessage, "✅") {
+				m.exitFileMode()
+			}
+		}
+		return m, nil
+
+	case "esc":
+		m.statusMessage = "Загрузка отменена"
+		m.exitFileMode()
+		return m, nil
+	}
+
+	m.filePathInput, cmd = m.filePathInput.Update(msg)
+	return m, cmd
+}
+
+func (m *Model) enterSaveMode() {
+	m.mode = ModeSavePrompt
+	m.filePathInput.SetValue(m.saveFile)
+	m.filePathInput.Focus()
+	m.statusMessage = ""
+}
+
+func (m *Model) enterLoadMode() {
+	m.mode = ModeLoadPrompt
+	m.filePathInput.SetValue(m.saveFile)
+	m.filePathInput.Focus()
+	m.statusMessage = ""
+}
+
+func (m *Model) exitFileMode() {
+	m.mode = ModeNormal
+	m.filePathInput.Blur()
+	m.filePathInput.SetValue("")
+	m.focusCurrent()
+}
+
 func (m *Model) moveCursor(delta int) {
 	newCursor := m.cursor + delta
-
 	if newCursor >= 0 && newCursor < m.totalFields() {
 		m.cursor = newCursor
 		m.blurAll()
@@ -193,7 +320,6 @@ func (m *Model) addBreak() {
 		from: createTimeInput(),
 		to:   createTimeInput(),
 	}
-
 	br.from.Blur()
 	br.to.Blur()
 	m.breaks = append(m.breaks, br)
@@ -222,7 +348,6 @@ func (m *Model) recalculate() {
 	if err != nil {
 		m.err = err.Error()
 		m.result = ""
-
 		return
 	}
 
@@ -238,7 +363,6 @@ func (m Model) getBreaksData() []BreakTime {
 			To:   br.to.Value(),
 		})
 	}
-
 	return breaks
 }
 
@@ -253,14 +377,16 @@ func (m *Model) saveState() {
 	}
 
 	if err := m.storage.Save(data); err != nil {
-		m.err = "Ошибка сохранения: " + err.Error()
+		m.statusMessage = "❌ Ошибка сохранения: " + err.Error()
+	} else {
+		m.statusMessage = "✅ Сохранено в " + m.saveFile
 	}
 }
 
 func (m *Model) loadState() {
 	data, err := m.storage.Load()
 	if err != nil {
-		m.err = "Ошибка загрузки: " + err.Error()
+		m.statusMessage = "❌ Ошибка загрузки: " + err.Error()
 		return
 	}
 
@@ -282,6 +408,8 @@ func (m *Model) loadState() {
 
 		m.breaks = append(m.breaks, Break{from: from, to: to})
 	}
+
+	m.statusMessage = "✅ Загружено из " + m.saveFile
 }
 
 func (m Model) getBreaksForSave() []BreakData {
@@ -292,7 +420,6 @@ func (m Model) getBreaksForSave() []BreakData {
 			To:   br.to.Value(),
 		})
 	}
-
 	return breaks
 }
 
@@ -313,11 +440,9 @@ func (m *Model) getCurrentField() *textinput.Model {
 			if (m.cursor-FieldBreaksStart)%2 == 0 {
 				return &m.breaks[idx].from
 			}
-
 			return &m.breaks[idx].to
 		}
 	}
-
 	return nil
 }
 
@@ -354,7 +479,6 @@ func (m Model) currentBreakIndex() (int, bool) {
 	if m.cursor < FieldBreaksStart {
 		return 0, false
 	}
-
 	return (m.cursor - FieldBreaksStart) / 2, true
 }
 
@@ -362,6 +486,21 @@ func toggleHelpState(state HelpState) HelpState {
 	if state == HelpHidden {
 		return HelpVisible
 	}
-
 	return HelpHidden
+}
+
+func toAbsolutePath(path string) (string, error) {
+	// Раскрываем тильду (~) в домашнюю директорию
+	if strings.HasPrefix(path, "~/") {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		path = filepath.Join(homeDir, path[2:])
+	}
+
+	if filepath.IsAbs(path) {
+		return path, nil
+	}
+	return filepath.Abs(path)
 }

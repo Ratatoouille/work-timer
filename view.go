@@ -53,11 +53,30 @@ var (
 	sectionStyle = lipgloss.NewStyle().
 			MarginTop(1).
 			MarginBottom(1)
+
+	promptStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			Padding(1, 2).
+			BorderForeground(lipgloss.Color("12"))
+
+	successStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("10"))
+
+	infoStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("14"))
 )
 
 func (m Model) View() string {
 	if m.helpState == HelpVisible {
 		return m.renderHelp()
+	}
+
+	if m.mode == ModeSavePrompt {
+		return m.renderSavePrompt()
+	}
+
+	if m.mode == ModeLoadPrompt {
+		return m.renderLoadPrompt()
 	}
 
 	return containerStyle.Render(m.renderMain())
@@ -69,6 +88,7 @@ func (m Model) renderMain() string {
 	b.WriteString(m.renderHeader())
 	b.WriteString(m.renderMainFields())
 	b.WriteString(m.renderBreaks())
+	b.WriteString(m.renderStatusMessage())
 	b.WriteString(m.renderStatus())
 	b.WriteString(m.renderControls())
 
@@ -85,7 +105,9 @@ func (m Model) renderHeader() string {
 	statusText := fmt.Sprintf(" %s │ ? help │ q quit", modeStr)
 
 	if m.saveFile != "" {
-		statusText += fmt.Sprintf(" │ ctrl+s save to %s", m.saveFile)
+		statusText += fmt.Sprintf(" │ s save │ o load")
+	} else {
+		statusText += " │ s save as │ o open"
 	}
 
 	return header + "\n" + statusBarStyle.Render(statusText) + "\n"
@@ -125,6 +147,14 @@ func (m Model) renderBreaks() string {
 	return b.String()
 }
 
+func (m Model) renderStatusMessage() string {
+	if m.statusMessage == "" {
+		return ""
+	}
+
+	return "\n" + infoStyle.Render(m.statusMessage) + "\n"
+}
+
 func (m Model) renderStatus() string {
 	var b strings.Builder
 
@@ -143,8 +173,33 @@ func (m Model) renderStatus() string {
 
 func (m Model) renderControls() string {
 	controls := "[j/k ↑↓] nav  [i] edit  [a] add  [d] del  [space] toggle  [esc] normal"
-
 	return "\n\n" + statusBarStyle.Render(controls) + "\n"
+}
+
+func (m Model) renderSavePrompt() string {
+	prompt := "💾 Сохранить как:\n\n" +
+		m.filePathInput.View()
+
+	if m.statusMessage != "" {
+		prompt += "\n\n" + m.statusMessage
+	}
+
+	prompt += "\n\n[Enter] сохранить  [Esc] отмена"
+
+	return promptStyle.Render(prompt)
+}
+
+func (m Model) renderLoadPrompt() string {
+	prompt := "📂 Загрузить из файла:\n\n" +
+		m.filePathInput.View()
+
+	if m.statusMessage != "" {
+		prompt += "\n\n" + m.statusMessage
+	}
+
+	prompt += "\n\n[Enter] загрузить  [Esc] отмена"
+
+	return promptStyle.Render(prompt)
 }
 
 func (m Model) renderField(index int, label string, input textinput.Model) string {
@@ -187,6 +242,8 @@ Normal-режим:
   a            — добавить перерыв
   d            — удалить перерыв
   space        — toggle чекбокс
+  s            — сохранить / сохранить как
+  o            — загрузить из файла
 
 Insert-режим:
   ввод текста
@@ -194,14 +251,17 @@ Insert-режим:
 
 Общие:
   ?            — показать/скрыть help
-  Ctrl+S       — сохранить в файл
+  Ctrl+S       — быстрое сохранение
+  Ctrl+O       — быстрая загрузка
   q            — выход
 
 Формат времени: чч:мм
 
 Использование:
-  ./program              - запуск без сохранения
-  ./program data.json    - загрузка/сохранение в data.json
+  ./program              - запуск без автозагрузки
+  ./program data.json    - автозагрузка из data.json
+
+Файл создается автоматически при первом сохранении.
 `
 
 	return helpBoxStyle.Render(help)
