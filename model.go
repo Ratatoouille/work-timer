@@ -16,6 +16,7 @@ const (
 	ModeInsert
 	ModeSavePrompt
 	ModeLoadPrompt
+	ModeFileList
 )
 
 type HelpState int
@@ -34,11 +35,14 @@ const (
 	FieldBreaksStart
 )
 
+const DefaultWorkDir = "~/work_timer"
+
 type Model struct {
 	mode      Mode
 	helpState HelpState
 	cursor    int
 	saveFile  string
+	workDir   string
 
 	// Input fields
 	startTime textinput.Model
@@ -49,8 +53,10 @@ type Model struct {
 	breaks    []Break
 
 	// File operation fields
-	filePathInput textinput.Model
-	statusMessage string
+	filePathInput  textinput.Model
+	statusMessage  string
+	availableFiles []string
+	fileListCursor int
 
 	// Calculation results
 	result string
@@ -68,8 +74,11 @@ type Break struct {
 
 func NewModel(saveFile string) Model {
 	fileInput := textinput.New()
-	fileInput.Placeholder = "путь/к/файлу.json"
+	fileInput.Placeholder = "имя_файла.json"
 	fileInput.Width = 40
+
+	// Получаем абсолютный путь рабочей директории
+	workDir, _ := toAbsolutePath(DefaultWorkDir)
 
 	// Конвертируем путь в абсолютный, если он передан
 	if saveFile != "" {
@@ -83,6 +92,7 @@ func NewModel(saveFile string) Model {
 		helpState:     HelpHidden,
 		cursor:        0,
 		saveFile:      saveFile,
+		workDir:       workDir,
 		startTime:     createTimeInput(),
 		workTime:      createTimeInput(),
 		worked:        createTimeInput(),
@@ -94,6 +104,9 @@ func NewModel(saveFile string) Model {
 	}
 
 	m.startTime.Focus()
+
+	// Создаем рабочую директорию если её нет
+	os.MkdirAll(workDir, 0o755)
 
 	if saveFile != "" {
 		m.loadState()
@@ -121,12 +134,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	// Global hotkeys
-	if m.mode != ModeSavePrompt && m.mode != ModeLoadPrompt {
+	if m.mode != ModeSavePrompt && m.mode != ModeLoadPrompt && m.mode != ModeFileList {
 		switch keyMsg.String() {
 		case "q":
 			return m, tea.Quit
 		case "?":
 			m.helpState = toggleHelpState(m.helpState)
+
 			return m, nil
 		case "ctrl+s":
 			if m.saveFile != "" {
@@ -134,9 +148,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				m.enterSaveMode()
 			}
+
 			return m, nil
 		case "ctrl+o":
-			m.enterLoadMode()
+			m.enterFileListMode()
+
 			return m, nil
 		}
 	}
@@ -157,9 +173,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m, cmd = m.updateSavePrompt(keyMsg)
 	case ModeLoadPrompt:
 		m, cmd = m.updateLoadPrompt(keyMsg)
+	case ModeFileList:
+		m, cmd = m.updateFileList(keyMsg)
 	}
 
 	m.recalculate()
+
 	return m, cmd
 }
 
@@ -187,14 +206,10 @@ func (m Model) updateNormalMode(msg tea.KeyMsg) (Model, tea.Cmd) {
 		}
 
 	case "s":
-		if m.saveFile != "" {
-			m.saveState()
-		} else {
-			m.enterSaveMode()
-		}
+		m.enterSaveMode()
 
 	case "o":
-		m.enterLoadMode()
+		m.enterFileListMode()
 	}
 
 	return m, nil
@@ -205,6 +220,7 @@ func (m Model) updateInsertMode(msg tea.KeyMsg) (Model, tea.Cmd) {
 		m.mode = ModeNormal
 		m.blurAll()
 		m.focusCurrent()
+
 		return m, nil
 	}
 
@@ -222,32 +238,43 @@ func (m Model) updateSavePrompt(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 	switch msg.String() {
 	case "enter":
-		filePath := m.filePathInput.Value()
-		if filePath != "" {
+		fileName := m.filePathInput.Value()
+		if fileName != "" {
+			// Если путь не абсолютный, сохраняем в рабочую директорию
+			var filePath string
+			if filepath.IsAbs(fileName) {
+				filePath = fileName
+			} else {
+				filePath = filepath.Join(m.workDir, fileName)
+			}
+
 			absPath, err := toAbsolutePath(filePath)
 			if err != nil {
 				m.statusMessage = "❌ Ошибка пути: " + err.Error()
-				// НЕ выходим из режима, чтобы можно было исправить путь
+
 				return m, nil
 			}
+
 			m.saveFile = absPath
 			m.storage = NewStorage(absPath)
 			m.saveState()
 
-			// Выходим только если сохранение прошло успешно
 			if strings.HasPrefix(m.statusMessage, "✅") {
 				m.exitFileMode()
 			}
 		}
+
 		return m, nil
 
 	case "esc":
 		m.statusMessage = "Сохранение отменено"
 		m.exitFileMode()
+
 		return m, nil
 	}
 
 	m.filePathInput, cmd = m.filePathInput.Update(msg)
+
 	return m, cmd
 }
 
@@ -261,42 +288,108 @@ func (m Model) updateLoadPrompt(msg tea.KeyMsg) (Model, tea.Cmd) {
 			absPath, err := toAbsolutePath(filePath)
 			if err != nil {
 				m.statusMessage = "❌ Ошибка пути: " + err.Error()
-				// НЕ выходим из режима, чтобы можно было исправить путь
+
 				return m, nil
 			}
+
 			m.saveFile = absPath
 			m.storage = NewStorage(absPath)
 			m.loadState()
 
-			// Выходим только если загрузка прошла успешно
 			if strings.HasPrefix(m.statusMessage, "✅") {
 				m.exitFileMode()
 			}
 		}
+
 		return m, nil
 
 	case "esc":
 		m.statusMessage = "Загрузка отменена"
 		m.exitFileMode()
+
 		return m, nil
 	}
 
 	m.filePathInput, cmd = m.filePathInput.Update(msg)
+
 	return m, cmd
+}
+
+func (m Model) updateFileList(msg tea.KeyMsg) (Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		if len(m.availableFiles) > 0 && m.fileListCursor < len(m.availableFiles) {
+			selectedFile := m.availableFiles[m.fileListCursor]
+			filePath := filepath.Join(m.workDir, selectedFile)
+			m.saveFile = filePath
+			m.storage = NewStorage(filePath)
+			m.loadState()
+			m.exitFileMode()
+		}
+
+		return m, nil
+
+	case "esc":
+		m.statusMessage = "Загрузка отменена"
+		m.exitFileMode()
+
+		return m, nil
+
+	case "j", "down":
+		if m.fileListCursor < len(m.availableFiles)-1 {
+			m.fileListCursor++
+		}
+
+	case "k", "up":
+		if m.fileListCursor > 0 {
+			m.fileListCursor--
+		}
+
+	case "n":
+		// Создать новый файл
+		m.mode = ModeLoadPrompt
+		m.filePathInput.SetValue("")
+		m.filePathInput.Focus()
+	}
+
+	return m, nil
 }
 
 func (m *Model) enterSaveMode() {
 	m.mode = ModeSavePrompt
-	m.filePathInput.SetValue(m.saveFile)
+	// Если файл уже есть, показываем только имя
+	if m.saveFile != "" {
+		m.filePathInput.SetValue(filepath.Base(m.saveFile))
+	} else {
+		m.filePathInput.SetValue("")
+	}
 	m.filePathInput.Focus()
 	m.statusMessage = ""
 }
 
-func (m *Model) enterLoadMode() {
-	m.mode = ModeLoadPrompt
-	m.filePathInput.SetValue(m.saveFile)
-	m.filePathInput.Focus()
+func (m *Model) enterFileListMode() {
+	m.mode = ModeFileList
+	m.fileListCursor = 0
 	m.statusMessage = ""
+	m.loadAvailableFiles()
+}
+
+func (m *Model) loadAvailableFiles() {
+	entries, err := os.ReadDir(m.workDir)
+	if err != nil {
+		m.availableFiles = []string{}
+
+		return
+	}
+
+	files := []string{}
+	for _, entry := range entries {
+		if !entry.IsDir() && filepath.Ext(entry.Name()) == ".json" {
+			files = append(files, entry.Name())
+		}
+	}
+
+	m.availableFiles = files
 }
 
 func (m *Model) exitFileMode() {
@@ -308,6 +401,7 @@ func (m *Model) exitFileMode() {
 
 func (m *Model) moveCursor(delta int) {
 	newCursor := m.cursor + delta
+
 	if newCursor >= 0 && newCursor < m.totalFields() {
 		m.cursor = newCursor
 		m.blurAll()
@@ -320,6 +414,7 @@ func (m *Model) addBreak() {
 		from: createTimeInput(),
 		to:   createTimeInput(),
 	}
+
 	br.from.Blur()
 	br.to.Blur()
 	m.breaks = append(m.breaks, br)
@@ -328,6 +423,7 @@ func (m *Model) addBreak() {
 func (m *Model) deleteCurrentBreak() {
 	if idx, ok := m.currentBreakIndex(); ok && idx < len(m.breaks) {
 		m.breaks = append(m.breaks[:idx], m.breaks[idx+1:]...)
+
 		if m.cursor > FieldAddFour {
 			m.cursor--
 		}
@@ -357,12 +453,14 @@ func (m *Model) recalculate() {
 
 func (m Model) getBreaksData() []BreakTime {
 	breaks := make([]BreakTime, 0, len(m.breaks))
+
 	for _, br := range m.breaks {
 		breaks = append(breaks, BreakTime{
 			From: br.from.Value(),
 			To:   br.to.Value(),
 		})
 	}
+
 	return breaks
 }
 
@@ -379,7 +477,7 @@ func (m *Model) saveState() {
 	if err := m.storage.Save(data); err != nil {
 		m.statusMessage = "❌ Ошибка сохранения: " + err.Error()
 	} else {
-		m.statusMessage = "✅ Сохранено в " + m.saveFile
+		m.statusMessage = "✅ Сохранено в " + filepath.Base(m.saveFile)
 	}
 }
 
@@ -387,6 +485,7 @@ func (m *Model) loadState() {
 	data, err := m.storage.Load()
 	if err != nil {
 		m.statusMessage = "❌ Ошибка загрузки: " + err.Error()
+
 		return
 	}
 
@@ -409,17 +508,19 @@ func (m *Model) loadState() {
 		m.breaks = append(m.breaks, Break{from: from, to: to})
 	}
 
-	m.statusMessage = "✅ Загружено из " + m.saveFile
+	m.statusMessage = "✅ Загружено из " + filepath.Base(m.saveFile)
 }
 
 func (m Model) getBreaksForSave() []BreakData {
 	breaks := make([]BreakData, 0, len(m.breaks))
+
 	for _, br := range m.breaks {
 		breaks = append(breaks, BreakData{
 			From: br.from.Value(),
 			To:   br.to.Value(),
 		})
 	}
+
 	return breaks
 }
 
@@ -440,9 +541,11 @@ func (m *Model) getCurrentField() *textinput.Model {
 			if (m.cursor-FieldBreaksStart)%2 == 0 {
 				return &m.breaks[idx].from
 			}
+
 			return &m.breaks[idx].to
 		}
 	}
+
 	return nil
 }
 
@@ -479,6 +582,7 @@ func (m Model) currentBreakIndex() (int, bool) {
 	if m.cursor < FieldBreaksStart {
 		return 0, false
 	}
+
 	return (m.cursor - FieldBreaksStart) / 2, true
 }
 
@@ -486,21 +590,23 @@ func toggleHelpState(state HelpState) HelpState {
 	if state == HelpHidden {
 		return HelpVisible
 	}
+
 	return HelpHidden
 }
 
 func toAbsolutePath(path string) (string, error) {
-	// Раскрываем тильду (~) в домашнюю директорию
 	if strings.HasPrefix(path, "~/") {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			return "", err
 		}
+
 		path = filepath.Join(homeDir, path[2:])
 	}
 
 	if filepath.IsAbs(path) {
 		return path, nil
 	}
+
 	return filepath.Abs(path)
 }

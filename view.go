@@ -59,11 +59,16 @@ var (
 			Padding(1, 2).
 			BorderForeground(lipgloss.Color("12"))
 
-	successStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("10"))
-
 	infoStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("14"))
+
+	fileListItemStyle = lipgloss.NewStyle().
+				Padding(0, 2)
+
+	fileListItemActiveStyle = lipgloss.NewStyle().
+				Padding(0, 2).
+				Background(lipgloss.Color("8")).
+				Bold(true)
 )
 
 func (m Model) View() string {
@@ -77,6 +82,10 @@ func (m Model) View() string {
 
 	if m.mode == ModeLoadPrompt {
 		return m.renderLoadPrompt()
+	}
+
+	if m.mode == ModeFileList {
+		return m.renderFileList()
 	}
 
 	return containerStyle.Render(m.renderMain())
@@ -102,13 +111,7 @@ func (m Model) renderHeader() string {
 	}
 
 	header := headerStyle.Render("🕒 Work Timer")
-	statusText := fmt.Sprintf(" %s │ ? help │ q quit", modeStr)
-
-	if m.saveFile != "" {
-		statusText += fmt.Sprintf(" │ s save │ o load")
-	} else {
-		statusText += " │ s save as │ o open"
-	}
+	statusText := fmt.Sprintf(" %s │ ? help │ q quit │ s save │ o open", modeStr)
 
 	return header + "\n" + statusBarStyle.Render(statusText) + "\n"
 }
@@ -173,11 +176,13 @@ func (m Model) renderStatus() string {
 
 func (m Model) renderControls() string {
 	controls := "[j/k ↑↓] nav  [i] edit  [a] add  [d] del  [space] toggle  [esc] normal"
+
 	return "\n\n" + statusBarStyle.Render(controls) + "\n"
 }
 
 func (m Model) renderSavePrompt() string {
 	prompt := "💾 Сохранить как:\n\n" +
+		"Рабочая папка: " + m.workDir + "\n\n" +
 		m.filePathInput.View()
 
 	if m.statusMessage != "" {
@@ -200,6 +205,29 @@ func (m Model) renderLoadPrompt() string {
 	prompt += "\n\n[Enter] загрузить  [Esc] отмена"
 
 	return promptStyle.Render(prompt)
+}
+
+func (m Model) renderFileList() string {
+	var b strings.Builder
+
+	b.WriteString("📂 Выберите файл для загрузки\n\n")
+	b.WriteString("Папка: " + m.workDir + "\n\n")
+
+	if len(m.availableFiles) == 0 {
+		b.WriteString("  Нет сохраненных файлов\n\n")
+		b.WriteString("[n] создать новый  [Esc] отмена")
+	} else {
+		for i, file := range m.availableFiles {
+			if i == m.fileListCursor {
+				b.WriteString(fileListItemActiveStyle.Render("▶ "+file) + "\n")
+			} else {
+				b.WriteString(fileListItemStyle.Render("  "+file) + "\n")
+			}
+		}
+		b.WriteString("\n[j/k ↑↓] навигация  [Enter] выбрать  [n] новый  [Esc] отмена")
+	}
+
+	return promptStyle.Render(b.String())
 }
 
 func (m Model) renderField(index int, label string, input textinput.Model) string {
@@ -242,27 +270,35 @@ Normal-режим:
   a            — добавить перерыв
   d            — удалить перерыв
   space        — toggle чекбокс
-  s            — сохранить / сохранить как
-  o            — загрузить из файла
+  s            — сохранить
+  o            — открыть список файлов
 
 Insert-режим:
   ввод текста
   Esc          — обратно в Normal
 
+Выбор файла:
+  j/k или ↑/↓  — навигация по списку
+  Enter        — загрузить выбранный файл
+  n            — создать новый файл
+  Esc          — отмена
+
 Общие:
   ?            — показать/скрыть help
   Ctrl+S       — быстрое сохранение
-  Ctrl+O       — быстрая загрузка
+  Ctrl+O       — открыть список файлов
   q            — выход
 
 Формат времени: чч:мм
 
-Использование:
-  ./program              - запуск без автозагрузки
-  ./program data.json    - автозагрузка из data.json
+Рабочая папка: %s
+  - Все файлы сохраняются в эту папку
+  - Папка создается автоматически
 
-Файл создается автоматически при первом сохранении.
+Использование:
+  ./program              - запуск с выбором файла
+  ./program file.json    - запуск с конкретным файлом
 `
 
-	return helpBoxStyle.Render(help)
+	return helpBoxStyle.Render(fmt.Sprintf(help, DefaultWorkDir))
 }
