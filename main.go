@@ -12,7 +12,7 @@ func main() {
 		saveFile = os.Args[1]
 	}
 
-	p := tea.NewProgram(NewModel(saveFile))
+	p := tea.NewProgram(NewModel(saveFile), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		panic(err)
 	}
