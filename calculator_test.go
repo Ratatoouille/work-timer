@@ -173,7 +173,7 @@ func TestCalculatorCalculate(t *testing.T) {
 			input: CalculationInput{
 				StartTime: "09:00",
 				WorkTime:  "08:00",
-				AddTZ:     false,
+				AddTZ:   false,
 			},
 			want:    "17:00",
 			wantErr: false,
@@ -211,7 +211,7 @@ func TestCalculatorCalculate(t *testing.T) {
 				StartTime:     "09:00",
 				WorkTime:      "08:00",
 				AddTZ:         true,
-				InputTimezone: "Europe/Moscow",    // UTC+3
+				InputTimezone: "Europe/Moscow",  // UTC+3
 				Timezone:      "Asia/Krasnoyarsk", // UTC+7, diff +4h
 			},
 			want:    "21:00 +07",
@@ -223,7 +223,7 @@ func TestCalculatorCalculate(t *testing.T) {
 				StartTime: "09:00",
 				Worked:    "05:00",
 				Plan:      "08:00",
-				AddTZ:     false,
+				AddTZ:   false,
 			},
 			want:    "12:00",
 			wantErr: false,
@@ -234,10 +234,9 @@ func TestCalculatorCalculate(t *testing.T) {
 				StartTime: "09:00",
 				Worked:    "10:00",
 				Plan:      "08:00",
-				AddTZ:     false,
+				AddTZ:   false,
 			},
-			want:    "09:00",
-			wantErr: false,
+			wantErr: true,
 		},
 		{
 			name: "invalid start time",
@@ -284,6 +283,9 @@ func TestCalculatorCalculate(t *testing.T) {
 func TestCalculateBreaksDuration(t *testing.T) {
 	calc := NewCalculator()
 
+	// zero time = no interval validation
+	noInterval := time.Time{}
+
 	tests := []struct {
 		name    string
 		breaks  []BreakTime
@@ -328,11 +330,18 @@ func TestCalculateBreaksDuration(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "break equal start and end",
+			breaks: []BreakTime{
+				{From: "12:00", To: "12:00"},
+			},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := calc.calculateBreaksDuration(tt.breaks)
+			got, err := calc.calculateBreaksDuration(tt.breaks, noInterval, noInterval)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("calculateBreaksDuration() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -341,5 +350,55 @@ func TestCalculateBreaksDuration(t *testing.T) {
 				t.Errorf("calculateBreaksDuration() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestCalculateBreaksIntervalValidation(t *testing.T) {
+	calc := NewCalculator()
+
+	workStart, _ := parseTime("09:00")
+	workEnd, _ := parseTime("17:00")
+
+	tests := []struct {
+		name    string
+		breaks  []BreakTime
+		wantErr bool
+	}{
+		{
+			name: "break within interval",
+			breaks: []BreakTime{
+				{From: "12:00", To: "13:00"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "break starts before workday",
+			breaks: []BreakTime{
+				{From: "08:00", To: "09:30"},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := calc.calculateBreaksDuration(tt.breaks, workStart, workEnd)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("calculateBreaksDuration() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestCalculateWorkedExceedsPlan(t *testing.T) {
+	calc := NewCalculator()
+
+	_, err := calc.Calculate(CalculationInput{
+		StartTime: "09:00",
+		Worked:    "10:00",
+		Plan:      "08:00",
+	})
+	if err == nil {
+		t.Error("Calculate() should return error when worked > plan")
 	}
 }

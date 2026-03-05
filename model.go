@@ -251,11 +251,9 @@ func (m Model) updateNormalMode(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 	case "a":
 		m.addBreak()
-		m.isDirty = true
 
 	case "d":
 		m.deleteCurrentBreak()
-		m.isDirty = true
 
 	case " ":
 		if m.cursor == FieldAddTZ {
@@ -500,6 +498,7 @@ func (m *Model) addBreak() {
 	br.from.Blur()
 	br.to.Blur()
 	m.breaks = append(m.breaks, br)
+	m.isDirty = true
 }
 
 func (m *Model) deleteCurrentBreak() {
@@ -509,6 +508,8 @@ func (m *Model) deleteCurrentBreak() {
 		if m.cursor > FieldAddTZ {
 			m.cursor--
 		}
+
+		m.isDirty = true
 	}
 }
 
@@ -546,25 +547,6 @@ func (m Model) getBreaksData() []BreakTime {
 	}
 
 	return breaks
-}
-
-// saveState используется при загрузке файла через аргумент — без cmd.
-func (m *Model) saveState() {
-	data := SaveData{
-		StartTime: m.startTime.Value(),
-		WorkTime:  m.workTime.Value(),
-		Worked:    m.worked.Value(),
-		Plan:      m.plan.Value(),
-		AddFour:   m.addTZ,
-		Breaks:    m.getBreaksForSave(),
-	}
-
-	if err := m.storage.Save(data); err != nil {
-		m.statusMessage = "❌ Ошибка сохранения: " + err.Error()
-	} else {
-		m.isDirty = false
-		m.statusMessage = "✅ Сохранено: " + filepath.Base(m.saveFile)
-	}
 }
 
 func (m *Model) loadState() {

@@ -54,7 +54,7 @@ func TestToAbsolutePath(t *testing.T) {
 func TestModelTotalFields(t *testing.T) {
 	m := NewModel("")
 
-	// Initially 5 fields (start, work, worked, plan, addFour)
+	// Initially 5 fields (start, workTime, worked, plan, addTZ)
 	if m.totalFields() != 5 {
 		t.Errorf("totalFields() = %v, want 5", m.totalFields())
 	}
@@ -75,19 +75,16 @@ func TestModelTotalFields(t *testing.T) {
 func TestModelAddAndDeleteBreak(t *testing.T) {
 	m := NewModel("")
 
-	// Initially no breaks
 	if len(m.breaks) != 0 {
 		t.Errorf("Initial breaks = %v, want 0", len(m.breaks))
 	}
 
-	// Add break
 	m.addBreak()
 	if len(m.breaks) != 1 {
 		t.Errorf("After addBreak() = %v, want 1", len(m.breaks))
 	}
 
-	// Delete break
-	m.cursor = 5 // First break field
+	m.cursor = 5 // First break field (FieldBreaksStart)
 	m.deleteCurrentBreak()
 	if len(m.breaks) != 0 {
 		t.Errorf("After deleteCurrentBreak() = %v, want 0", len(m.breaks))
@@ -97,24 +94,21 @@ func TestModelAddAndDeleteBreak(t *testing.T) {
 func TestModelMoveCursor(t *testing.T) {
 	m := NewModel("")
 
-	// Start at 0
 	if m.cursor != 0 {
 		t.Errorf("Initial cursor = %v, want 0", m.cursor)
 	}
 
-	// Move down
 	m.moveCursor(1)
 	if m.cursor != 1 {
 		t.Errorf("After moveCursor(1) = %v, want 1", m.cursor)
 	}
 
-	// Move up
 	m.moveCursor(-1)
 	if m.cursor != 0 {
 		t.Errorf("After moveCursor(-1) = %v, want 0", m.cursor)
 	}
 
-	// Try to move beyond bounds (should stay at 0)
+	// Stay at boundary
 	m.moveCursor(-1)
 	if m.cursor != 0 {
 		t.Errorf("After moveCursor(-1) at boundary = %v, want 0", m.cursor)
@@ -131,8 +125,8 @@ func TestModelCurrentBreakIndex(t *testing.T) {
 		wantIndex int
 		wantOk    bool
 	}{
-		{cursor: 0, wantIndex: 0, wantOk: false}, // StartTime field
-		{cursor: 4, wantIndex: 0, wantOk: false}, // AddFour field
+		{cursor: 0, wantIndex: 0, wantOk: false}, // FieldStartTime
+		{cursor: 4, wantIndex: 0, wantOk: false}, // FieldAddTZ
 		{cursor: 5, wantIndex: 0, wantOk: true},  // First break from
 		{cursor: 6, wantIndex: 0, wantOk: true},  // First break to
 		{cursor: 7, wantIndex: 1, wantOk: true},  // Second break from
@@ -153,8 +147,6 @@ func TestModelCurrentBreakIndex(t *testing.T) {
 
 func TestModelRecalculate(t *testing.T) {
 	m := NewModel("")
-
-	// Set valid data
 	m.startTime.SetValue("09:00")
 	m.workTime.SetValue("08:00")
 
@@ -170,8 +162,6 @@ func TestModelRecalculate(t *testing.T) {
 
 func TestModelRecalculateWithError(t *testing.T) {
 	m := NewModel("")
-
-	// Set invalid data
 	m.startTime.SetValue("25:00")
 	m.workTime.SetValue("08:00")
 
@@ -185,6 +175,35 @@ func TestModelRecalculateWithError(t *testing.T) {
 	}
 }
 
+func TestModelRecalculateWorkedExceedsPlan(t *testing.T) {
+	m := NewModel("")
+	m.startTime.SetValue("09:00")
+	m.worked.SetValue("10:00")
+	m.plan.SetValue("08:00")
+
+	m.recalculate()
+
+	if m.result != "" {
+		t.Errorf("recalculate() result should be empty when worked > plan, got %v", m.result)
+	}
+	if m.err == "" {
+		t.Error("recalculate() should set error when worked > plan")
+	}
+}
+
+func TestModelIsDirtyOnEdit(t *testing.T) {
+	m := NewModel("")
+
+	if m.isDirty {
+		t.Error("New model should not be dirty")
+	}
+
+	m.addBreak()
+	if !m.isDirty {
+		t.Error("Model should be dirty after addBreak()")
+	}
+}
+
 func TestModelLoadAvailableFiles(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "work-timer-test-*")
 	if err != nil {
@@ -192,7 +211,6 @@ func TestModelLoadAvailableFiles(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Create test files
 	os.WriteFile(filepath.Join(tmpDir, "test1.json"), []byte("{}"), 0o644)
 	os.WriteFile(filepath.Join(tmpDir, "test2.json"), []byte("{}"), 0o644)
 	os.WriteFile(filepath.Join(tmpDir, "readme.txt"), []byte(""), 0o644)
@@ -201,14 +219,11 @@ func TestModelLoadAvailableFiles(t *testing.T) {
 	m.workDir = tmpDir
 	m.loadAvailableFiles()
 
-	// Should only find .json files
 	if len(m.availableFiles) != 2 {
 		t.Errorf("loadAvailableFiles() found %v files, want 2", len(m.availableFiles))
 	}
 
-	// Check that both json files are in the list
-	hasTest1 := false
-	hasTest2 := false
+	hasTest1, hasTest2 := false, false
 	for _, f := range m.availableFiles {
 		if f == "test1.json" {
 			hasTest1 = true

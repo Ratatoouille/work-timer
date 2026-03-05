@@ -239,9 +239,17 @@ func (m Model) renderMainFields() string {
 	b.WriteString(m.renderSectionHeader("▸", "Основные параметры", sectionHeaderStyle))
 	b.WriteString("\n")
 	b.WriteString(m.renderField(FieldStartTime, "Начало:", m.startTime) + "\n")
+
+	// Режим 1: оставшееся время
+	b.WriteString("\n" + sectionDividerStyle.Render("  · · режим 1: оставшееся время · ·") + "\n")
 	b.WriteString(m.renderField(FieldWorkTime, "Оставшееся время:", m.workTime) + "\n")
+
+	// Режим 2: отработано / план
+	b.WriteString("\n" + sectionDividerStyle.Render("  · · режим 2: отработано / план · ·") + "\n")
 	b.WriteString(m.renderField(FieldWorked, "Отработано:", m.worked) + "\n")
 	b.WriteString(m.renderField(FieldPlan, "План:", m.plan) + "\n")
+
+	b.WriteString("\n")
 
 	checkboxLabel := "Добавить +N часов"
 	if m.config.Timezone != "" {

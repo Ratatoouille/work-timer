@@ -40,7 +40,7 @@ func (c *Calculator) Calculate(input CalculationInput) (string, error) {
 		return "", err
 	}
 
-	totalBreakDuration, err := c.calculateBreaksDuration(input.Breaks)
+	totalBreakDuration, err := c.calculateBreaksDuration(input.Breaks, startTime, startTime.Add(remainingTime))
 	if err != nil {
 		return "", err
 	}
@@ -71,41 +71,44 @@ func (c *Calculator) calculateRemainingTime(input CalculationInput) (time.Durati
 			return 0, fmt.Errorf("неверный формат 'план'")
 		}
 
-		remaining := plan - worked
-		if remaining < 0 {
-			remaining = 0
+		if worked > plan {
+			return 0, fmt.Errorf("отработано (%s) больше плана (%s)", input.Worked, input.Plan)
 		}
 
-		return remaining, nil
+		return plan - worked, nil
 	}
 
 	return 0, fmt.Errorf("введите либо оставшееся время, либо отработано/план")
 }
 
-func (c *Calculator) calculateBreaksDuration(breaks []BreakTime) (time.Duration, error) {
+func (c *Calculator) calculateBreaksDuration(breaks []BreakTime, workStart, _ time.Time) (time.Duration, error) {
 	total := time.Duration(0)
 
-	for _, br := range breaks {
+	for i, br := range breaks {
 		if br.From == "" || br.To == "" {
 			continue
 		}
 
 		from, err := parseTime(br.From)
 		if err != nil {
-			return 0, fmt.Errorf("неверный формат времени перерыва (начало)")
+			return 0, fmt.Errorf("перерыв %d: неверный формат времени начала", i+1)
 		}
 
 		to, err := parseTime(br.To)
 		if err != nil {
-			return 0, fmt.Errorf("неверный формат времени перерыва (конец)")
+			return 0, fmt.Errorf("перерыв %d: неверный формат времени конца", i+1)
 		}
 
-		duration := to.Sub(from)
-		if duration < 0 {
-			return 0, fmt.Errorf("время окончания перерыва раньше начала")
+		if to.Before(from) || to.Equal(from) {
+			return 0, fmt.Errorf("перерыв %d: время конца раньше или равно началу", i+1)
 		}
 
-		total += duration
+		if !workStart.IsZero() && from.Before(workStart) {
+			return 0, fmt.Errorf("перерыв %d: начало (%s) раньше начала рабочего дня (%s)",
+				i+1, br.From, workStart.Format("15:04"))
+		}
+
+		total += to.Sub(from)
 	}
 
 	return total, nil
