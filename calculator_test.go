@@ -74,9 +74,11 @@ func TestParseTime(t *testing.T) {
 		},
 	}
 
+	calc := NewCalculator(localeEN)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parseTime(tt.input)
+			got, err := calc.parseTime(tt.input)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("parseTime() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -145,9 +147,11 @@ func TestParseDuration(t *testing.T) {
 		},
 	}
 
+	calc := NewCalculator(localeEN)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parseDuration(tt.input)
+			got, err := calc.parseDuration(tt.input)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("parseDuration() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -160,7 +164,7 @@ func TestParseDuration(t *testing.T) {
 }
 
 func TestCalculatorCalculate(t *testing.T) {
-	calc := NewCalculator()
+	calc := NewCalculator(localeEN)
 
 	tests := []struct {
 		name    string
@@ -173,7 +177,7 @@ func TestCalculatorCalculate(t *testing.T) {
 			input: CalculationInput{
 				StartTime: "09:00",
 				WorkTime:  "08:00",
-				AddTZ:   false,
+				AddTZ:     false,
 			},
 			want:    "17:00",
 			wantErr: false,
@@ -211,7 +215,7 @@ func TestCalculatorCalculate(t *testing.T) {
 				StartTime:     "09:00",
 				WorkTime:      "08:00",
 				AddTZ:         true,
-				InputTimezone: "Europe/Moscow",  // UTC+3
+				InputTimezone: "Europe/Moscow",    // UTC+3
 				Timezone:      "Asia/Krasnoyarsk", // UTC+7, diff +4h
 			},
 			want:    "21:00 +07",
@@ -223,7 +227,7 @@ func TestCalculatorCalculate(t *testing.T) {
 				StartTime: "09:00",
 				Worked:    "05:00",
 				Plan:      "08:00",
-				AddTZ:   false,
+				AddTZ:     false,
 			},
 			want:    "12:00",
 			wantErr: false,
@@ -234,7 +238,7 @@ func TestCalculatorCalculate(t *testing.T) {
 				StartTime: "09:00",
 				Worked:    "10:00",
 				Plan:      "08:00",
-				AddTZ:   false,
+				AddTZ:     false,
 			},
 			wantErr: true,
 		},
@@ -281,7 +285,7 @@ func TestCalculatorCalculate(t *testing.T) {
 }
 
 func TestCalculateBreaksDuration(t *testing.T) {
-	calc := NewCalculator()
+	calc := NewCalculator(localeEN)
 
 	// zero time = no interval validation
 	noInterval := time.Time{}
@@ -354,10 +358,10 @@ func TestCalculateBreaksDuration(t *testing.T) {
 }
 
 func TestCalculateBreaksIntervalValidation(t *testing.T) {
-	calc := NewCalculator()
+	calc := NewCalculator(localeEN)
 
-	workStart, _ := parseTime("09:00")
-	workEnd, _ := parseTime("17:00")
+	workStart, _ := calc.parseTime("09:00")
+	workEnd, _ := calc.parseTime("17:00")
 
 	tests := []struct {
 		name    string
@@ -391,7 +395,7 @@ func TestCalculateBreaksIntervalValidation(t *testing.T) {
 }
 
 func TestCalculateWorkedExceedsPlan(t *testing.T) {
-	calc := NewCalculator()
+	calc := NewCalculator(localeEN)
 
 	_, err := calc.Calculate(CalculationInput{
 		StartTime: "09:00",

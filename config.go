@@ -12,8 +12,9 @@ const ConfigPath = "~/.config/work_timer/config.toml"
 
 type Config struct {
 	WorkDir       string   `toml:"work_dir"`
-	InputTimezone string   `toml:"input_timezone"` // зона в которой вводится время, default "Europe/Moscow"
-	Timezone      string   `toml:"timezone"`       // целевая зона для конвертации результата
+	Language      string   `toml:"language"`       // "ru" (default) или "en"
+	InputTimezone string   `toml:"input_timezone"`
+	Timezone      string   `toml:"timezone"`
 	UI            ConfigUI `toml:"ui"`
 }
 
@@ -39,6 +40,7 @@ type ConfigTimeouts struct {
 func defaultConfig() Config {
 	return Config{
 		WorkDir:       DefaultWorkDir,
+		Language:      "ru",
 		InputTimezone: "Europe/Moscow",
 		Timezone:      "",
 		UI: ConfigUI{
@@ -105,6 +107,9 @@ func LoadConfig() Config {
 	if cfg.WorkDir == "" {
 		cfg.WorkDir = def.WorkDir
 	}
+	if cfg.Language == "" {
+		cfg.Language = def.Language
+	}
 	if cfg.InputTimezone == "" {
 		cfg.InputTimezone = def.InputTimezone
 	}
@@ -122,6 +127,9 @@ func writeDefaultConfig(absPath string) error {
 
 # Рабочая папка для сохранений
 work_dir = "~/work_timer"
+
+# Язык интерфейса: "ru" или "en"
+language = "ru"
 
 # Часовой пояс в котором вводится время (начало, перерывы и т.д.)
 input_timezone = "Europe/Moscow"

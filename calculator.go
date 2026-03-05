@@ -7,7 +7,9 @@ import (
 	"time"
 )
 
-type Calculator struct{}
+type Calculator struct {
+	locale Locale
+}
 
 type CalculationInput struct {
 	StartTime     string
@@ -25,14 +27,14 @@ type BreakTime struct {
 	To   string
 }
 
-func NewCalculator() *Calculator {
-	return &Calculator{}
+func NewCalculator(locale Locale) *Calculator {
+	return &Calculator{locale: locale}
 }
 
 func (c *Calculator) Calculate(input CalculationInput) (string, error) {
-	startTime, err := parseTime(input.StartTime)
+	startTime, err := c.parseTime(input.StartTime)
 	if err != nil {
-		return "", fmt.Errorf("неверное время начала")
+		return "", fmt.Errorf("%s", c.locale.ErrInvalidStartTime)
 	}
 
 	remainingTime, err := c.calculateRemainingTime(input)
@@ -57,28 +59,28 @@ func (c *Calculator) Calculate(input CalculationInput) (string, error) {
 
 func (c *Calculator) calculateRemainingTime(input CalculationInput) (time.Duration, error) {
 	if input.WorkTime != "" {
-		return parseDuration(input.WorkTime)
+		return c.parseDuration(input.WorkTime)
 	}
 
 	if input.Worked != "" && input.Plan != "" {
-		worked, err := parseDuration(input.Worked)
+		worked, err := c.parseDuration(input.Worked)
 		if err != nil {
-			return 0, fmt.Errorf("неверный формат 'отработано'")
+			return 0, fmt.Errorf("%s", c.locale.ErrInvalidWorked)
 		}
 
-		plan, err := parseDuration(input.Plan)
+		plan, err := c.parseDuration(input.Plan)
 		if err != nil {
-			return 0, fmt.Errorf("неверный формат 'план'")
+			return 0, fmt.Errorf("%s", c.locale.ErrInvalidPlan)
 		}
 
 		if worked > plan {
-			return 0, fmt.Errorf("отработано (%s) больше плана (%s)", input.Worked, input.Plan)
+			return 0, fmt.Errorf(c.locale.ErrWorkedExceedsPlan, input.Worked, input.Plan)
 		}
 
 		return plan - worked, nil
 	}
 
-	return 0, fmt.Errorf("введите либо оставшееся время, либо отработано/план")
+	return 0, fmt.Errorf("%s", c.locale.ErrNoTimeInput)
 }
 
 func (c *Calculator) calculateBreaksDuration(breaks []BreakTime, workStart, _ time.Time) (time.Duration, error) {
@@ -89,23 +91,22 @@ func (c *Calculator) calculateBreaksDuration(breaks []BreakTime, workStart, _ ti
 			continue
 		}
 
-		from, err := parseTime(br.From)
+		from, err := c.parseTime(br.From)
 		if err != nil {
-			return 0, fmt.Errorf("перерыв %d: неверный формат времени начала", i+1)
+			return 0, fmt.Errorf(c.locale.ErrBreakInvalidFrom, i+1)
 		}
 
-		to, err := parseTime(br.To)
+		to, err := c.parseTime(br.To)
 		if err != nil {
-			return 0, fmt.Errorf("перерыв %d: неверный формат времени конца", i+1)
+			return 0, fmt.Errorf(c.locale.ErrBreakInvalidTo, i+1)
 		}
 
 		if to.Before(from) || to.Equal(from) {
-			return 0, fmt.Errorf("перерыв %d: время конца раньше или равно началу", i+1)
+			return 0, fmt.Errorf(c.locale.ErrBreakEndBeforeStart, i+1)
 		}
 
 		if !workStart.IsZero() && from.Before(workStart) {
-			return 0, fmt.Errorf("перерыв %d: начало (%s) раньше начала рабочего дня (%s)",
-				i+1, br.From, workStart.Format("15:04"))
+			return 0, fmt.Errorf(c.locale.ErrBreakBeforeWorkday, i+1, br.From, workStart.Format("15:04"))
 		}
 
 		total += to.Sub(from)
@@ -120,12 +121,12 @@ func (c *Calculator) formatResult(endTime time.Time, addTZ bool, inputTimezone, 
 	}
 
 	if timezone == "" {
-		return "", fmt.Errorf("timezone не задан в конфиге (~/.config/work_timer/config.toml)")
+		return "", fmt.Errorf("%s", c.locale.ErrTimezoneNotSet)
 	}
 
 	targetLoc := TimezoneLocation(timezone)
 	if targetLoc == nil {
-		return "", fmt.Errorf("неверный timezone в конфиге: %q", timezone)
+		return "", fmt.Errorf(c.locale.ErrTimezoneInvalid, timezone)
 	}
 
 	// Определяем зону ввода — если не задана или невалидна, используем UTC
@@ -148,39 +149,39 @@ func (c *Calculator) formatResult(endTime time.Time, addTZ bool, inputTimezone, 
 	return converted.Format("15:04") + " " + label, nil
 }
 
-func parseTime(value string) (time.Time, error) {
+func (c *Calculator) parseTime(value string) (time.Time, error) {
 	parts := strings.Split(value, ":")
 	if len(parts) != 2 {
-		return time.Time{}, fmt.Errorf("неверный формат времени")
+		return time.Time{}, fmt.Errorf("%s", c.locale.ErrInvalidTimeFormat)
 	}
 
 	hours, err := strconv.Atoi(strings.TrimSpace(parts[0]))
 	if err != nil || hours < 0 || hours > 23 {
-		return time.Time{}, fmt.Errorf("неверные часы")
+		return time.Time{}, fmt.Errorf("%s", c.locale.ErrInvalidHours)
 	}
 
 	minutes, err := strconv.Atoi(strings.TrimSpace(parts[1]))
 	if err != nil || minutes < 0 || minutes > 59 {
-		return time.Time{}, fmt.Errorf("неверные минуты")
+		return time.Time{}, fmt.Errorf("%s", c.locale.ErrInvalidMinutes)
 	}
 
 	return time.Date(0, 1, 1, hours, minutes, 0, 0, time.UTC), nil
 }
 
-func parseDuration(value string) (time.Duration, error) {
+func (c *Calculator) parseDuration(value string) (time.Duration, error) {
 	parts := strings.Split(value, ":")
 	if len(parts) != 2 {
-		return 0, fmt.Errorf("неверный формат длительности")
+		return 0, fmt.Errorf("%s", c.locale.ErrInvalidDuration)
 	}
 
 	hours, err := strconv.Atoi(strings.TrimSpace(parts[0]))
 	if err != nil || hours < 0 {
-		return 0, fmt.Errorf("неверные часы")
+		return 0, fmt.Errorf("%s", c.locale.ErrInvalidHours)
 	}
 
 	minutes, err := strconv.Atoi(strings.TrimSpace(parts[1]))
 	if err != nil || minutes < 0 || minutes > 59 {
-		return 0, fmt.Errorf("неверные минуты")
+		return 0, fmt.Errorf("%s", c.locale.ErrInvalidMinutes)
 	}
 
 	return time.Duration(hours)*time.Hour + time.Duration(minutes)*time.Minute, nil

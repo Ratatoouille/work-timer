@@ -64,6 +64,7 @@ type Model struct {
 
 	// Config
 	config Config
+	locale Locale
 
 	// Input fields
 	startTime textinput.Model
@@ -94,12 +95,13 @@ type Break struct {
 }
 
 func NewModel(saveFile string) Model {
-	fileInput := textinput.New()
-	fileInput.Placeholder = "имя_файла.json"
-	fileInput.Width = 40
-
 	cfg := LoadConfig()
 	initStyles(cfg)
+	loc := LoadLocale(cfg.Language)
+
+	fileInput := textinput.New()
+	fileInput.Placeholder = loc.PlaceholderFile
+	fileInput.Width = 40
 
 	workDir, _ := toAbsolutePath(cfg.WorkDir)
 
@@ -116,6 +118,7 @@ func NewModel(saveFile string) Model {
 		saveFile:      saveFile,
 		workDir:       workDir,
 		config:        cfg,
+		locale:        loc,
 		startTime:     createTimeInput(),
 		workTime:      createTimeInput(),
 		worked:        createTimeInput(),
@@ -123,8 +126,14 @@ func NewModel(saveFile string) Model {
 		breaks:        []Break{},
 		filePathInput: fileInput,
 		storage:       NewStorage(saveFile),
-		calculator:    NewCalculator(),
+		calculator:    NewCalculator(loc),
 	}
+
+	// Плейсхолдеры полей ввода из локали
+	m.startTime.Placeholder = loc.PlaceholderTime
+	m.workTime.Placeholder = loc.PlaceholderTime
+	m.worked.Placeholder = loc.PlaceholderTime
+	m.plan.Placeholder = loc.PlaceholderTime
 
 	m.startTime.Focus()
 
@@ -139,7 +148,6 @@ func NewModel(saveFile string) Model {
 
 func createTimeInput() textinput.Model {
 	ti := textinput.New()
-	ti.Placeholder = "чч:мм"
 	ti.Width = 6
 
 	return ti
@@ -163,7 +171,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case clipboardCopiedMsg:
-		m.statusMessage = "✅ Скопировано в буфер обмена"
+		m.statusMessage = m.locale.StatusCopied
 		return m, clearStatusAfter(time.Duration(m.config.UI.Timeouts.Clipboard) * time.Second)
 	}
 
@@ -184,7 +192,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Dirty check: first q warns, second q quits
 			if m.isDirty && !m.confirmQuit {
 				m.confirmQuit = true
-				m.statusMessage = "⚠  Есть несохранённые изменения. Нажмите q ещё раз для выхода"
+				m.statusMessage = m.locale.StatusUnsaved
 				return m, clearStatusAfter(time.Duration(m.config.UI.Timeouts.Warning) * time.Second)
 			}
 			return m, tea.Quit
@@ -314,7 +322,7 @@ func (m Model) updateSavePrompt(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 			absPath, err := toAbsolutePath(filePath)
 			if err != nil {
-				m.statusMessage = "❌ Ошибка пути: " + err.Error()
+				m.statusMessage = fmt.Sprintf(m.locale.StatusPathError, err.Error())
 				return m, nil
 			}
 
@@ -326,7 +334,7 @@ func (m Model) updateSavePrompt(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, nil
 
 	case "esc":
-		m.statusMessage = "Сохранение отменено"
+		m.statusMessage = m.locale.StatusSaveCancelled
 		m.exitFileMode()
 		return m, nil
 	}
@@ -345,7 +353,7 @@ func (m Model) updateLoadPrompt(msg tea.KeyMsg) (Model, tea.Cmd) {
 		if filePath != "" {
 			absPath, err := toAbsolutePath(filePath)
 			if err != nil {
-				m.statusMessage = "❌ Ошибка пути: " + err.Error()
+				m.statusMessage = fmt.Sprintf(m.locale.StatusPathError, err.Error())
 				return m, nil
 			}
 
@@ -362,7 +370,7 @@ func (m Model) updateLoadPrompt(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, nil
 
 	case "esc":
-		m.statusMessage = "Загрузка отменена"
+		m.statusMessage = m.locale.StatusLoadCancelled
 		m.exitFileMode()
 		return m, nil
 	}
@@ -388,7 +396,7 @@ func (m Model) updateFileList(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, nil
 
 	case "esc":
-		m.statusMessage = "Загрузка отменена"
+		m.statusMessage = m.locale.StatusLoadCancelled
 		m.exitFileMode()
 		return m, nil
 
@@ -423,12 +431,12 @@ func (m *Model) saveStateCmd() tea.Cmd {
 	}
 
 	if err := m.storage.Save(data); err != nil {
-		m.statusMessage = "❌ Ошибка сохранения: " + err.Error()
+		m.statusMessage = fmt.Sprintf(m.locale.StatusSaveError, err.Error())
 		return clearStatusAfter(time.Duration(m.config.UI.Timeouts.Warning) * time.Second)
 	}
 
 	m.isDirty = false
-	m.statusMessage = "✅ Сохранено: " + filepath.Base(m.saveFile)
+	m.statusMessage = fmt.Sprintf(m.locale.StatusSavedAs, filepath.Base(m.saveFile))
 
 	if m.mode == ModeSavePrompt {
 		m.exitFileMode()
@@ -552,7 +560,7 @@ func (m Model) getBreaksData() []BreakTime {
 func (m *Model) loadState() {
 	data, err := m.storage.Load()
 	if err != nil {
-		m.statusMessage = "❌ Ошибка загрузки: " + err.Error()
+		m.statusMessage = fmt.Sprintf(m.locale.StatusLoadError, err.Error())
 		return
 	}
 
@@ -576,7 +584,7 @@ func (m *Model) loadState() {
 	}
 
 	m.isDirty = false
-	m.statusMessage = "✅ Загружено: " + filepath.Base(m.saveFile)
+	m.statusMessage = fmt.Sprintf(m.locale.StatusLoadedFrom, filepath.Base(m.saveFile))
 }
 
 func (m Model) getBreaksForSave() []BreakData {

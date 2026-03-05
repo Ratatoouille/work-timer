@@ -199,16 +199,16 @@ func (m Model) renderMain() string {
 
 func (m Model) renderHeader() string {
 	modeStyle := modeNormalStyle
-	modeStr := "NORMAL"
+	modeStr := m.locale.ModeNormal
 	if m.mode == ModeInsert {
 		modeStyle = modeInsertStyle
-		modeStr = "INSERT"
+		modeStr = m.locale.ModeInsert
 	}
 
 	title := headerStyle.Render("🕒 Work Timer")
 	mode := modeStyle.Render(modeStr)
 	sep := headerDividerStyle.Render("│")
-	hints := statusBarStyle.Render("? help │ q quit │ s save │ o open")
+	hints := statusBarStyle.Render(m.locale.HeaderHints)
 	topLine := lipgloss.JoinHorizontal(lipgloss.Left, title, "  ", mode, " ", sep, " ", hints)
 
 	var fileLine string
@@ -221,7 +221,7 @@ func (m Model) renderHeader() string {
 		}
 		fileLine = "  " + dot + " " + fileNameStyle.Render(filepath.Base(m.saveFile))
 	} else {
-		fileLine = "  " + statusBarStyle.Render("○ файл не выбран")
+		fileLine = "  " + statusBarStyle.Render(m.locale.NoFileSelected)
 	}
 
 	divider := headerDividerStyle.Render(strings.Repeat("─", m.dividerWidth()))
@@ -236,25 +236,25 @@ func (m Model) renderSectionHeader(icon, title string, style lipgloss.Style) str
 
 func (m Model) renderMainFields() string {
 	var b strings.Builder
-	b.WriteString(m.renderSectionHeader("▸", "Основные параметры", sectionHeaderStyle))
+	b.WriteString(m.renderSectionHeader("▸", m.locale.SectionMain, sectionHeaderStyle))
 	b.WriteString("\n")
-	b.WriteString(m.renderField(FieldStartTime, "Начало:", m.startTime) + "\n")
+	b.WriteString(m.renderField(FieldStartTime, m.locale.FieldStart, m.startTime) + "\n")
 
 	// Режим 1: оставшееся время
-	b.WriteString("\n" + sectionDividerStyle.Render("  · · режим 1: оставшееся время · ·") + "\n")
-	b.WriteString(m.renderField(FieldWorkTime, "Оставшееся время:", m.workTime) + "\n")
+	b.WriteString("\n" + sectionDividerStyle.Render(m.locale.FieldMode1Label) + "\n")
+	b.WriteString(m.renderField(FieldWorkTime, m.locale.FieldRemainingTime, m.workTime) + "\n")
 
 	// Режим 2: отработано / план
-	b.WriteString("\n" + sectionDividerStyle.Render("  · · режим 2: отработано / план · ·") + "\n")
-	b.WriteString(m.renderField(FieldWorked, "Отработано:", m.worked) + "\n")
-	b.WriteString(m.renderField(FieldPlan, "План:", m.plan) + "\n")
+	b.WriteString("\n" + sectionDividerStyle.Render(m.locale.FieldMode2Label) + "\n")
+	b.WriteString(m.renderField(FieldWorked, m.locale.FieldWorked, m.worked) + "\n")
+	b.WriteString(m.renderField(FieldPlan, m.locale.FieldPlan, m.plan) + "\n")
 
 	b.WriteString("\n")
 
-	checkboxLabel := "Добавить +N часов"
+	checkboxLabel := m.locale.CheckboxAddTZ
 	if m.config.Timezone != "" {
 		if label := TimezoneLabel(m.config.Timezone); label != "" {
-			checkboxLabel = "Показать в " + label
+			checkboxLabel = fmt.Sprintf(m.locale.CheckboxShowIn, label)
 		}
 	}
 	b.WriteString(m.renderCheckbox(FieldAddTZ, checkboxLabel) + "\n")
@@ -268,7 +268,7 @@ func (m Model) renderBreaks() string {
 	}
 
 	var b strings.Builder
-	b.WriteString(m.renderSectionHeader("▸", "Перерывы", sectionBreakHeaderStyle))
+	b.WriteString(m.renderSectionHeader("▸", m.locale.SectionBreaks, sectionBreakHeaderStyle))
 	b.WriteString("\n")
 
 	for i, br := range m.breaks {
@@ -276,8 +276,8 @@ func (m Model) renderBreaks() string {
 		if i > 0 {
 			b.WriteString(sectionDividerStyle.Render("  "+strings.Repeat("·", 30)) + "\n")
 		}
-		b.WriteString(m.renderField(baseIndex, fmt.Sprintf("Перерыв %d — ушёл:", i+1), br.from) + "\n")
-		b.WriteString(m.renderField(baseIndex+1, fmt.Sprintf("Перерыв %d — вернулся:", i+1), br.to) + "\n")
+		b.WriteString(m.renderField(baseIndex, fmt.Sprintf(m.locale.BreakLeft, i+1), br.from) + "\n")
+		b.WriteString(m.renderField(baseIndex+1, fmt.Sprintf(m.locale.BreakRight, i+1), br.to) + "\n")
 	}
 
 	return b.String()
@@ -316,7 +316,7 @@ func (m Model) renderResult() string {
 		b.WriteString(errorStyle.Render("✗  "+m.err) + "\n")
 	}
 	if m.result != "" {
-		label := resultLabelStyle.Render("Время окончания  ")
+		label := resultLabelStyle.Render(m.locale.ResultLabel)
 		value := resultValueStyle.Render("⏰  " + m.result)
 		b.WriteString(resultBoxStyle.Render(label+value) + "\n")
 	}
@@ -326,15 +326,15 @@ func (m Model) renderResult() string {
 
 func (m Model) renderControls() string {
 	keys := []struct{ key, desc string }{
-		{"j/k ↑↓", "nav"},
-		{"i", "edit"},
-		{"a", "add"},
-		{"d", "del"},
-		{"space", "toggle"},
-		{"esc", "normal"},
+		{"j/k ↑↓", m.locale.CtrlNav},
+		{"i", m.locale.CtrlEdit},
+		{"a", m.locale.CtrlAdd},
+		{"d", m.locale.CtrlDel},
+		{"space", m.locale.CtrlToggle},
+		{"esc", m.locale.CtrlNormal},
 	}
 	if m.result != "" {
-		keys = append(keys, struct{ key, desc string }{"y", "copy"})
+		keys = append(keys, struct{ key, desc string }{"y", m.locale.CtrlCopy})
 	}
 
 	var parts []string
@@ -347,8 +347,8 @@ func (m Model) renderControls() string {
 }
 
 func (m Model) renderSavePrompt() string {
-	body := headerStyle.Render("💾 Сохранить как") +
-		"\n\n" + statusBarStyle.Render("Папка: "+m.workDir) +
+	body := headerStyle.Render(m.locale.SaveTitle) +
+		"\n\n" + statusBarStyle.Render(fmt.Sprintf(m.locale.SaveFolder, m.workDir)) +
 		"\n\n" + m.filePathInput.View()
 
 	if m.statusMessage != "" {
@@ -358,33 +358,33 @@ func (m Model) renderSavePrompt() string {
 			body += "\n\n" + statusErrorStyle.Render(m.statusMessage)
 		}
 	}
-	body += "\n\n" + statusBarStyle.Render("[Enter] сохранить  [Esc] отмена")
+	body += "\n\n" + statusBarStyle.Render(m.locale.SaveHint)
 	return promptStyle.Render(body)
 }
 
 func (m Model) renderLoadPrompt() string {
-	body := headerStyle.Render("📂 Загрузить из файла") +
+	body := headerStyle.Render(m.locale.LoadTitle) +
 		"\n\n" + m.filePathInput.View()
 
 	if m.statusMessage != "" {
 		body += "\n\n" + statusBarStyle.Render(m.statusMessage)
 	}
-	body += "\n\n" + statusBarStyle.Render("[Enter] загрузить  [Esc] отмена")
+	body += "\n\n" + statusBarStyle.Render(m.locale.LoadHint)
 	return promptStyle.Render(body)
 }
 
 func (m Model) renderFileList() string {
 	var b strings.Builder
-	b.WriteString(headerStyle.Render("📂 Выберите файл") + "\n\n")
-	b.WriteString(statusBarStyle.Render("Папка: "+m.workDir) + "\n\n")
+	b.WriteString(headerStyle.Render(m.locale.FileListTitle) + "\n\n")
+	b.WriteString(statusBarStyle.Render(fmt.Sprintf(m.locale.SaveFolder, m.workDir)) + "\n\n")
 
 	divider := sectionDividerStyle.Render(strings.Repeat("─", 40))
 	b.WriteString(divider + "\n")
 
 	if len(m.availableFiles) == 0 {
-		b.WriteString("\n  " + statusBarStyle.Render("Нет сохраненных файлов") + "\n\n")
+		b.WriteString("\n  " + statusBarStyle.Render(m.locale.FileListEmpty) + "\n\n")
 		b.WriteString(divider + "\n\n")
-		b.WriteString(statusBarStyle.Render("[n] создать новый  [Esc] отмена"))
+		b.WriteString(statusBarStyle.Render(m.locale.FileListHintNew))
 	} else {
 		b.WriteString("\n")
 		for i, file := range m.availableFiles {
@@ -395,7 +395,7 @@ func (m Model) renderFileList() string {
 			}
 		}
 		b.WriteString("\n" + divider + "\n\n")
-		b.WriteString(statusBarStyle.Render("[j/k ↑↓] навигация  [Enter] выбрать  [n] новый  [Esc] отмена"))
+		b.WriteString(statusBarStyle.Render(m.locale.FileListHint))
 	}
 	return promptStyle.Render(b.String())
 }
@@ -427,39 +427,5 @@ func (m Model) renderCheckbox(index int, label string) string {
 }
 
 func (m Model) renderHelp() string {
-	help := `🛠  Комбинации клавиш
-
-Normal-режим:
-  j/k или ↑/↓  — перемещение
-  i            — Insert режим
-  a            — добавить перерыв
-  d            — удалить перерыв
-  space        — toggle чекбокс
-  y            — скопировать результат
-  s            — сохранить
-  o            — открыть список файлов
-
-Insert-режим:
-  ввод текста
-  Esc          — обратно в Normal
-
-Выбор файла:
-  j/k или ↑/↓  — навигация по списку
-  Enter        — загрузить выбранный файл
-  n            — создать новый файл
-  Esc          — отмена
-
-Общие:
-  ?            — показать/скрыть help
-  q            — закрыть help / выход
-  Ctrl+S       — быстрое сохранение
-  Ctrl+O       — открыть список файлов
-
-Конфиг: %s
-
-Формат времени: чч:мм
-
-Рабочая папка: %s
-`
-	return helpBoxStyle.Render(fmt.Sprintf(help, ConfigPath, DefaultWorkDir))
+	return helpBoxStyle.Render(fmt.Sprintf(m.locale.HelpText, ConfigPath, DefaultWorkDir))
 }
