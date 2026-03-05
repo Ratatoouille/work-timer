@@ -10,12 +10,14 @@ import (
 type Calculator struct{}
 
 type CalculationInput struct {
-	StartTime string
-	WorkTime  string
-	Worked    string
-	Plan      string
-	AddFour   bool
-	Breaks    []BreakTime
+	StartTime     string
+	WorkTime      string
+	Worked        string
+	Plan          string
+	AddTZ         bool   // конвертировать результат в целевой TZ
+	InputTimezone string // зона ввода (из конфига, напр. "Europe/Moscow")
+	Timezone      string // целевая IANA timezone
+	Breaks        []BreakTime
 }
 
 type BreakTime struct {
@@ -45,7 +47,12 @@ func (c *Calculator) Calculate(input CalculationInput) (string, error) {
 
 	endTime := startTime.Add(remainingTime).Add(totalBreakDuration)
 
-	return c.formatResult(endTime, input.AddFour), nil
+	result, err := c.formatResult(endTime, input.AddTZ, input.InputTimezone, input.Timezone)
+	if err != nil {
+		return "", err
+	}
+
+	return result, nil
 }
 
 func (c *Calculator) calculateRemainingTime(input CalculationInput) (time.Duration, error) {
@@ -68,6 +75,7 @@ func (c *Calculator) calculateRemainingTime(input CalculationInput) (time.Durati
 		if remaining < 0 {
 			remaining = 0
 		}
+
 		return remaining, nil
 	}
 
@@ -103,14 +111,38 @@ func (c *Calculator) calculateBreaksDuration(breaks []BreakTime) (time.Duration,
 	return total, nil
 }
 
-func (c *Calculator) formatResult(endTime time.Time, addFour bool) string {
-	if addFour {
-		endTime = endTime.Add(4 * time.Hour)
-
-		return endTime.Format("15:04") + " KRSK"
+func (c *Calculator) formatResult(endTime time.Time, addTZ bool, inputTimezone, timezone string) (string, error) {
+	if !addTZ {
+		return endTime.Format("15:04"), nil
 	}
 
-	return endTime.Format("15:04")
+	if timezone == "" {
+		return "", fmt.Errorf("timezone не задан в конфиге (~/.config/work_timer/config.toml)")
+	}
+
+	targetLoc := TimezoneLocation(timezone)
+	if targetLoc == nil {
+		return "", fmt.Errorf("неверный timezone в конфиге: %q", timezone)
+	}
+
+	// Определяем зону ввода — если не задана или невалидна, используем UTC
+	inputLoc := TimezoneLocation(inputTimezone)
+	if inputLoc == nil {
+		inputLoc = time.UTC
+	}
+
+	// Строим endTime в зоне ввода с реальной датой, затем конвертируем
+	now := time.Now()
+	localEnd := time.Date(
+		now.Year(), now.Month(), now.Day(),
+		endTime.Hour(), endTime.Minute(), 0, 0,
+		inputLoc,
+	)
+
+	converted := localEnd.In(targetLoc)
+	label, _ := converted.Zone()
+
+	return converted.Format("15:04") + " " + label, nil
 }
 
 func parseTime(value string) (time.Time, error) {

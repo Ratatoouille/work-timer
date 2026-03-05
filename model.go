@@ -1,9 +1,12 @@
 package main
 
 import (
+	"encoding/base64"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -31,11 +34,18 @@ const (
 	FieldWorkTime
 	FieldWorked
 	FieldPlan
-	FieldAddFour
+	FieldAddTZ
 	FieldBreaksStart
 )
 
 const DefaultWorkDir = "~/work_timer"
+
+// --- Message types ----------------------------------------------------------
+
+type clearStatusMsg struct{}
+type clipboardCopiedMsg struct{}
+
+// ----------------------------------------------------------------------------
 
 type Model struct {
 	mode      Mode
@@ -44,12 +54,23 @@ type Model struct {
 	saveFile  string
 	workDir   string
 
+	// Terminal size
+	width  int
+	height int
+
+	// Dirty tracking
+	isDirty     bool
+	confirmQuit bool
+
+	// Config
+	config Config
+
 	// Input fields
 	startTime textinput.Model
 	workTime  textinput.Model
 	worked    textinput.Model
 	plan      textinput.Model
-	addFour   bool
+	addTZ     bool
 	breaks    []Break
 
 	// File operation fields
@@ -77,10 +98,11 @@ func NewModel(saveFile string) Model {
 	fileInput.Placeholder = "имя_файла.json"
 	fileInput.Width = 40
 
-	// Получаем абсолютный путь рабочей директории
-	workDir, _ := toAbsolutePath(DefaultWorkDir)
+	cfg := LoadConfig()
+	initStyles(cfg)
 
-	// Конвертируем путь в абсолютный, если он передан
+	workDir, _ := toAbsolutePath(cfg.WorkDir)
+
 	if saveFile != "" {
 		if absPath, err := toAbsolutePath(saveFile); err == nil {
 			saveFile = absPath
@@ -93,6 +115,7 @@ func NewModel(saveFile string) Model {
 		cursor:        0,
 		saveFile:      saveFile,
 		workDir:       workDir,
+		config:        cfg,
 		startTime:     createTimeInput(),
 		workTime:      createTimeInput(),
 		worked:        createTimeInput(),
@@ -105,7 +128,6 @@ func NewModel(saveFile string) Model {
 
 	m.startTime.Focus()
 
-	// Создаем рабочую директорию если её нет
 	os.MkdirAll(workDir, 0o755)
 
 	if saveFile != "" {
@@ -128,41 +150,68 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// --- Non-key messages ---------------------------------------------------
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		return m, nil
+
+	case clearStatusMsg:
+		m.statusMessage = ""
+		m.confirmQuit = false
+		return m, nil
+
+	case clipboardCopiedMsg:
+		m.statusMessage = "✅ Скопировано в буфер обмена"
+		return m, clearStatusAfter(time.Duration(m.config.UI.Timeouts.Clipboard) * time.Second)
+	}
+
 	keyMsg, ok := msg.(tea.KeyMsg)
 	if !ok {
 		return m, nil
 	}
 
-	// Global hotkeys
+	// --- Global hotkeys (work in all modes except file prompts) -------------
 	if m.mode != ModeSavePrompt && m.mode != ModeLoadPrompt && m.mode != ModeFileList {
 		switch keyMsg.String() {
 		case "q":
+			// If help is visible, just close it
+			if m.helpState == HelpVisible {
+				m.helpState = HelpHidden
+				return m, nil
+			}
+			// Dirty check: first q warns, second q quits
+			if m.isDirty && !m.confirmQuit {
+				m.confirmQuit = true
+				m.statusMessage = "⚠  Есть несохранённые изменения. Нажмите q ещё раз для выхода"
+				return m, clearStatusAfter(time.Duration(m.config.UI.Timeouts.Warning) * time.Second)
+			}
 			return m, tea.Quit
+
 		case "?":
 			m.helpState = toggleHelpState(m.helpState)
-
 			return m, nil
+
 		case "ctrl+s":
 			if m.saveFile != "" {
-				m.saveState()
-			} else {
-				m.enterSaveMode()
+				return m, m.saveStateCmd()
 			}
-
+			m.enterSaveMode()
 			return m, nil
+
 		case "ctrl+o":
 			m.enterFileListMode()
-
 			return m, nil
 		}
 	}
 
-	// Help screen handling
+	// --- Help screen: eat all other keys ------------------------------------
 	if m.helpState == HelpVisible {
 		return m, nil
 	}
 
-	// Mode-specific handling
+	// --- Mode-specific handling ---------------------------------------------
 	var cmd tea.Cmd
 	switch m.mode {
 	case ModeNormal:
@@ -183,6 +232,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) updateNormalMode(msg tea.KeyMsg) (Model, tea.Cmd) {
+	// Any key resets the quit-confirm banner
+	if m.confirmQuit {
+		m.confirmQuit = false
+		m.statusMessage = ""
+	}
+
 	switch msg.String() {
 	case "i":
 		m.mode = ModeInsert
@@ -196,13 +251,16 @@ func (m Model) updateNormalMode(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 	case "a":
 		m.addBreak()
+		m.isDirty = true
 
 	case "d":
 		m.deleteCurrentBreak()
+		m.isDirty = true
 
 	case " ":
-		if m.cursor == FieldAddFour {
-			m.addFour = !m.addFour
+		if m.cursor == FieldAddTZ {
+			m.addTZ = !m.addTZ
+			m.isDirty = true
 		}
 
 	case "s":
@@ -210,6 +268,11 @@ func (m Model) updateNormalMode(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 	case "o":
 		m.enterFileListMode()
+
+	case "y":
+		if m.result != "" {
+			return m, copyToClipboard(m.result)
+		}
 	}
 
 	return m, nil
@@ -227,7 +290,11 @@ func (m Model) updateInsertMode(msg tea.KeyMsg) (Model, tea.Cmd) {
 	var cmd tea.Cmd
 	field := m.getCurrentField()
 	if field != nil {
+		before := field.Value()
 		*field, cmd = field.Update(msg)
+		if field.Value() != before {
+			m.isDirty = true
+		}
 	}
 
 	return m, cmd
@@ -240,7 +307,6 @@ func (m Model) updateSavePrompt(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "enter":
 		fileName := m.filePathInput.Value()
 		if fileName != "" {
-			// Если путь не абсолютный, сохраняем в рабочую директорию
 			var filePath string
 			if filepath.IsAbs(fileName) {
 				filePath = fileName
@@ -251,17 +317,12 @@ func (m Model) updateSavePrompt(msg tea.KeyMsg) (Model, tea.Cmd) {
 			absPath, err := toAbsolutePath(filePath)
 			if err != nil {
 				m.statusMessage = "❌ Ошибка пути: " + err.Error()
-
 				return m, nil
 			}
 
 			m.saveFile = absPath
 			m.storage = NewStorage(absPath)
-			m.saveState()
-
-			if strings.HasPrefix(m.statusMessage, "✅") {
-				m.exitFileMode()
-			}
+			return m, m.saveStateCmd()
 		}
 
 		return m, nil
@@ -269,7 +330,6 @@ func (m Model) updateSavePrompt(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "esc":
 		m.statusMessage = "Сохранение отменено"
 		m.exitFileMode()
-
 		return m, nil
 	}
 
@@ -288,7 +348,6 @@ func (m Model) updateLoadPrompt(msg tea.KeyMsg) (Model, tea.Cmd) {
 			absPath, err := toAbsolutePath(filePath)
 			if err != nil {
 				m.statusMessage = "❌ Ошибка пути: " + err.Error()
-
 				return m, nil
 			}
 
@@ -298,6 +357,7 @@ func (m Model) updateLoadPrompt(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 			if strings.HasPrefix(m.statusMessage, "✅") {
 				m.exitFileMode()
+				return m, clearStatusAfter(time.Duration(m.config.UI.Timeouts.Status) * time.Second)
 			}
 		}
 
@@ -306,7 +366,6 @@ func (m Model) updateLoadPrompt(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "esc":
 		m.statusMessage = "Загрузка отменена"
 		m.exitFileMode()
-
 		return m, nil
 	}
 
@@ -325,6 +384,7 @@ func (m Model) updateFileList(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.storage = NewStorage(filePath)
 			m.loadState()
 			m.exitFileMode()
+			return m, clearStatusAfter(time.Duration(m.config.UI.Timeouts.Status) * time.Second)
 		}
 
 		return m, nil
@@ -332,7 +392,6 @@ func (m Model) updateFileList(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "esc":
 		m.statusMessage = "Загрузка отменена"
 		m.exitFileMode()
-
 		return m, nil
 
 	case "j", "down":
@@ -346,7 +405,6 @@ func (m Model) updateFileList(msg tea.KeyMsg) (Model, tea.Cmd) {
 		}
 
 	case "n":
-		// Создать новый файл
 		m.mode = ModeLoadPrompt
 		m.filePathInput.SetValue("")
 		m.filePathInput.Focus()
@@ -355,9 +413,34 @@ func (m Model) updateFileList(msg tea.KeyMsg) (Model, tea.Cmd) {
 	return m, nil
 }
 
+// saveStateCmd выполняет сохранение и возвращает команду очистки статуса.
+func (m *Model) saveStateCmd() tea.Cmd {
+	data := SaveData{
+		StartTime: m.startTime.Value(),
+		WorkTime:  m.workTime.Value(),
+		Worked:    m.worked.Value(),
+		Plan:      m.plan.Value(),
+		AddFour:   m.addTZ,
+		Breaks:    m.getBreaksForSave(),
+	}
+
+	if err := m.storage.Save(data); err != nil {
+		m.statusMessage = "❌ Ошибка сохранения: " + err.Error()
+		return clearStatusAfter(time.Duration(m.config.UI.Timeouts.Warning) * time.Second)
+	}
+
+	m.isDirty = false
+	m.statusMessage = "✅ Сохранено: " + filepath.Base(m.saveFile)
+
+	if m.mode == ModeSavePrompt {
+		m.exitFileMode()
+	}
+
+	return clearStatusAfter(time.Duration(m.config.UI.Timeouts.Status) * time.Second)
+}
+
 func (m *Model) enterSaveMode() {
 	m.mode = ModeSavePrompt
-	// Если файл уже есть, показываем только имя
 	if m.saveFile != "" {
 		m.filePathInput.SetValue(filepath.Base(m.saveFile))
 	} else {
@@ -378,7 +461,6 @@ func (m *Model) loadAvailableFiles() {
 	entries, err := os.ReadDir(m.workDir)
 	if err != nil {
 		m.availableFiles = []string{}
-
 		return
 	}
 
@@ -424,7 +506,7 @@ func (m *Model) deleteCurrentBreak() {
 	if idx, ok := m.currentBreakIndex(); ok && idx < len(m.breaks) {
 		m.breaks = append(m.breaks[:idx], m.breaks[idx+1:]...)
 
-		if m.cursor > FieldAddFour {
+		if m.cursor > FieldAddTZ {
 			m.cursor--
 		}
 	}
@@ -432,12 +514,14 @@ func (m *Model) deleteCurrentBreak() {
 
 func (m *Model) recalculate() {
 	input := CalculationInput{
-		StartTime: m.startTime.Value(),
-		WorkTime:  m.workTime.Value(),
-		Worked:    m.worked.Value(),
-		Plan:      m.plan.Value(),
-		AddFour:   m.addFour,
-		Breaks:    m.getBreaksData(),
+		StartTime:     m.startTime.Value(),
+		WorkTime:      m.workTime.Value(),
+		Worked:        m.worked.Value(),
+		Plan:          m.plan.Value(),
+		AddTZ:         m.addTZ,
+		InputTimezone: m.config.InputTimezone,
+		Timezone:      m.config.Timezone,
+		Breaks:        m.getBreaksData(),
 	}
 
 	result, err := m.calculator.Calculate(input)
@@ -464,20 +548,22 @@ func (m Model) getBreaksData() []BreakTime {
 	return breaks
 }
 
+// saveState используется при загрузке файла через аргумент — без cmd.
 func (m *Model) saveState() {
 	data := SaveData{
 		StartTime: m.startTime.Value(),
 		WorkTime:  m.workTime.Value(),
 		Worked:    m.worked.Value(),
 		Plan:      m.plan.Value(),
-		AddFour:   m.addFour,
+		AddFour:   m.addTZ,
 		Breaks:    m.getBreaksForSave(),
 	}
 
 	if err := m.storage.Save(data); err != nil {
 		m.statusMessage = "❌ Ошибка сохранения: " + err.Error()
 	} else {
-		m.statusMessage = "✅ Сохранено в " + filepath.Base(m.saveFile)
+		m.isDirty = false
+		m.statusMessage = "✅ Сохранено: " + filepath.Base(m.saveFile)
 	}
 }
 
@@ -485,7 +571,6 @@ func (m *Model) loadState() {
 	data, err := m.storage.Load()
 	if err != nil {
 		m.statusMessage = "❌ Ошибка загрузки: " + err.Error()
-
 		return
 	}
 
@@ -493,7 +578,7 @@ func (m *Model) loadState() {
 	m.workTime.SetValue(data.WorkTime)
 	m.worked.SetValue(data.Worked)
 	m.plan.SetValue(data.Plan)
-	m.addFour = data.AddFour
+	m.addTZ = data.AddFour
 
 	m.breaks = make([]Break, 0, len(data.Breaks))
 	for _, bd := range data.Breaks {
@@ -508,7 +593,8 @@ func (m *Model) loadState() {
 		m.breaks = append(m.breaks, Break{from: from, to: to})
 	}
 
-	m.statusMessage = "✅ Загружено из " + filepath.Base(m.saveFile)
+	m.isDirty = false
+	m.statusMessage = "✅ Загружено: " + filepath.Base(m.saveFile)
 }
 
 func (m Model) getBreaksForSave() []BreakData {
@@ -534,14 +620,13 @@ func (m *Model) getCurrentField() *textinput.Model {
 		return &m.worked
 	case FieldPlan:
 		return &m.plan
-	case FieldAddFour:
+	case FieldAddTZ:
 		return nil
 	default:
 		if idx := (m.cursor - FieldBreaksStart) / 2; idx < len(m.breaks) {
 			if (m.cursor-FieldBreaksStart)%2 == 0 {
 				return &m.breaks[idx].from
 			}
-
 			return &m.breaks[idx].to
 		}
 	}
@@ -609,4 +694,26 @@ func toAbsolutePath(path string) (string, error) {
 	}
 
 	return filepath.Abs(path)
+}
+
+// --- Commands ---------------------------------------------------------------
+
+// clearStatusAfter возвращает команду, которая через d очистит statusMessage.
+func clearStatusAfter(d time.Duration) tea.Cmd {
+	return tea.Tick(d, func(time.Time) tea.Msg {
+		return clearStatusMsg{}
+	})
+}
+
+// copyToClipboard копирует текст через OSC 52 (работает в большинстве терминалов).
+func copyToClipboard(text string) tea.Cmd {
+	return func() tea.Msg {
+		encoded := base64.StdEncoding.EncodeToString([]byte(text))
+		f, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
+		if err == nil {
+			fmt.Fprintf(f, "\033]52;c;%s\007", encoded)
+			f.Close()
+		}
+		return clipboardCopiedMsg{}
+	}
 }

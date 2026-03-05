@@ -173,7 +173,7 @@ func TestCalculatorCalculate(t *testing.T) {
 			input: CalculationInput{
 				StartTime: "09:00",
 				WorkTime:  "08:00",
-				AddFour:   false,
+				AddTZ:     false,
 			},
 			want:    "17:00",
 			wantErr: false,
@@ -186,7 +186,7 @@ func TestCalculatorCalculate(t *testing.T) {
 				Breaks: []BreakTime{
 					{From: "12:00", To: "13:00"},
 				},
-				AddFour: false,
+				AddTZ: false,
 			},
 			want:    "18:00",
 			wantErr: false,
@@ -200,19 +200,21 @@ func TestCalculatorCalculate(t *testing.T) {
 					{From: "12:00", To: "12:30"},
 					{From: "15:00", To: "15:15"},
 				},
-				AddFour: false,
+				AddTZ: false,
 			},
 			want:    "17:45",
 			wantErr: false,
 		},
 		{
-			name: "calculation with +4 hours",
+			name: "calculation with timezone conversion",
 			input: CalculationInput{
-				StartTime: "09:00",
-				WorkTime:  "08:00",
-				AddFour:   true,
+				StartTime:     "09:00",
+				WorkTime:      "08:00",
+				AddTZ:         true,
+				InputTimezone: "Europe/Moscow",    // UTC+3
+				Timezone:      "Asia/Krasnoyarsk", // UTC+7, diff +4h
 			},
-			want:    "21:00 KRSK",
+			want:    "21:00 +07",
 			wantErr: false,
 		},
 		{
@@ -221,7 +223,7 @@ func TestCalculatorCalculate(t *testing.T) {
 				StartTime: "09:00",
 				Worked:    "05:00",
 				Plan:      "08:00",
-				AddFour:   false,
+				AddTZ:     false,
 			},
 			want:    "12:00",
 			wantErr: false,
@@ -232,7 +234,7 @@ func TestCalculatorCalculate(t *testing.T) {
 				StartTime: "09:00",
 				Worked:    "10:00",
 				Plan:      "08:00",
-				AddFour:   false,
+				AddTZ:     false,
 			},
 			want:    "09:00",
 			wantErr: false,
