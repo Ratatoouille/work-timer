@@ -12,11 +12,17 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.WorkDir != DefaultWorkDir {
 		t.Errorf("WorkDir = %v, want %v", cfg.WorkDir, DefaultWorkDir)
 	}
+	if cfg.Language != "ru" {
+		t.Errorf("Language = %v, want ru", cfg.Language)
+	}
 	if cfg.InputTimezone != "Europe/Moscow" {
 		t.Errorf("InputTimezone = %v, want Europe/Moscow", cfg.InputTimezone)
 	}
 	if cfg.Timezone != "" {
 		t.Errorf("Timezone = %v, want empty", cfg.Timezone)
+	}
+	if cfg.DefaultFile != "" {
+		t.Errorf("DefaultFile = %v, want empty", cfg.DefaultFile)
 	}
 	if cfg.UI.LabelWidth != 22 {
 		t.Errorf("LabelWidth = %v, want 22", cfg.UI.LabelWidth)
@@ -42,12 +48,10 @@ func TestLoadConfigCreatesDefault(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Подменяем домашнюю директорию через переменную окружения
 	t.Setenv("HOME", tmpDir)
 
 	cfg := LoadConfig()
 
-	// Должны получить дефолты
 	if cfg.WorkDir != DefaultWorkDir {
 		t.Errorf("WorkDir = %v, want %v", cfg.WorkDir, DefaultWorkDir)
 	}
@@ -55,7 +59,6 @@ func TestLoadConfigCreatesDefault(t *testing.T) {
 		t.Errorf("InputTimezone = %v, want Europe/Moscow", cfg.InputTimezone)
 	}
 
-	// Файл конфига должен быть создан
 	configFile := filepath.Join(tmpDir, ".config", "work_timer", "config.toml")
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {
 		t.Error("LoadConfig() should create default config file")
@@ -75,9 +78,11 @@ func TestLoadConfigParsesValues(t *testing.T) {
 	os.MkdirAll(configDir, 0o755)
 
 	content := `
-work_dir = "~/my_timers"
-input_timezone = "Europe/Moscow"
-timezone = "Asia/Krasnoyarsk"
+work_dir        = "~/my_timers"
+default_file    = "~/my_timers/today.json"
+language        = "en"
+input_timezone  = "Europe/Moscow"
+timezone        = "Asia/Krasnoyarsk"
 
 [ui]
 label_width = 30
@@ -99,6 +104,12 @@ warning   = 7
 
 	if cfg.WorkDir != "~/my_timers" {
 		t.Errorf("WorkDir = %v, want ~/my_timers", cfg.WorkDir)
+	}
+	if cfg.DefaultFile != "~/my_timers/today.json" {
+		t.Errorf("DefaultFile = %v, want ~/my_timers/today.json", cfg.DefaultFile)
+	}
+	if cfg.Language != "en" {
+		t.Errorf("Language = %v, want en", cfg.Language)
 	}
 	if cfg.InputTimezone != "Europe/Moscow" {
 		t.Errorf("InputTimezone = %v, want Europe/Moscow", cfg.InputTimezone)
@@ -129,13 +140,11 @@ func TestLoadConfigFillsZeroValues(t *testing.T) {
 	configDir := filepath.Join(tmpDir, ".config", "work_timer")
 	os.MkdirAll(configDir, 0o755)
 
-	// Частичный конфиг — только timezone
 	content := `timezone = "Asia/Krasnoyarsk"`
 	os.WriteFile(filepath.Join(configDir, "config.toml"), []byte(content), 0o644)
 
 	cfg := LoadConfig()
 
-	// Нулевые значения должны заполниться дефолтами
 	if cfg.UI.LabelWidth != 22 {
 		t.Errorf("LabelWidth should fallback to 22, got %v", cfg.UI.LabelWidth)
 	}
@@ -148,7 +157,9 @@ func TestLoadConfigFillsZeroValues(t *testing.T) {
 	if cfg.WorkDir != DefaultWorkDir {
 		t.Errorf("WorkDir should fallback to default, got %v", cfg.WorkDir)
 	}
-	// Заданное значение должно сохраниться
+	if cfg.Language != "ru" {
+		t.Errorf("Language should fallback to ru, got %v", cfg.Language)
+	}
 	if cfg.Timezone != "Asia/Krasnoyarsk" {
 		t.Errorf("Timezone = %v, want Asia/Krasnoyarsk", cfg.Timezone)
 	}
@@ -157,7 +168,7 @@ func TestLoadConfigFillsZeroValues(t *testing.T) {
 func TestTimezoneLabel(t *testing.T) {
 	tests := []struct {
 		timezone string
-		wantErr  bool // пустая строка или непустая
+		wantErr  bool
 	}{
 		{timezone: "", wantErr: true},
 		{timezone: "Invalid/Zone", wantErr: true},
@@ -168,8 +179,7 @@ func TestTimezoneLabel(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.timezone, func(t *testing.T) {
 			got := TimezoneLabel(tt.timezone)
-			isEmpty := got == ""
-			if isEmpty != tt.wantErr {
+			if (got == "") != tt.wantErr {
 				t.Errorf("TimezoneLabel(%q) = %q, wantEmpty=%v", tt.timezone, got, tt.wantErr)
 			}
 		})
@@ -185,5 +195,19 @@ func TestTimezoneLocation(t *testing.T) {
 	}
 	if TimezoneLocation("Europe/Moscow") == nil {
 		t.Error("TimezoneLocation(Europe/Moscow) should not return nil")
+	}
+}
+
+func TestCurrentTimeInZone(t *testing.T) {
+	// Проверяем формат "15:04"
+	got := CurrentTimeInZone("Europe/Moscow")
+	if len(got) != 5 || got[2] != ':' {
+		t.Errorf("CurrentTimeInZone() = %q, want HH:MM format", got)
+	}
+
+	// Невалидная зона — падает на time.Local без паники
+	got2 := CurrentTimeInZone("Invalid/Zone")
+	if len(got2) != 5 || got2[2] != ':' {
+		t.Errorf("CurrentTimeInZone(invalid) = %q, want HH:MM format", got2)
 	}
 }

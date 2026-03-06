@@ -12,6 +12,7 @@ const ConfigPath = "~/.config/work_timer/config.toml"
 
 type Config struct {
 	WorkDir       string   `toml:"work_dir"`
+	DefaultFile   string   `toml:"default_file"`   // открывать при старте без аргумента
 	Language      string   `toml:"language"`       // "ru" (default) или "en"
 	InputTimezone string   `toml:"input_timezone"`
 	Timezone      string   `toml:"timezone"`
@@ -40,6 +41,7 @@ type ConfigTimeouts struct {
 func defaultConfig() Config {
 	return Config{
 		WorkDir:       DefaultWorkDir,
+		DefaultFile:   "",
 		Language:      "ru",
 		InputTimezone: "Europe/Moscow",
 		Timezone:      "",
@@ -128,6 +130,10 @@ func writeDefaultConfig(absPath string) error {
 # Рабочая папка для сохранений
 work_dir = "~/work_timer"
 
+# Открывать этот файл при старте без аргумента командной строки.
+# Оставьте пустым чтобы каждый раз выбирать вручную.
+default_file = ""
+
 # Язык интерфейса: "ru" или "en"
 language = "ru"
 
@@ -145,10 +151,10 @@ label_width = 22
 
 [ui.colors]
 # Цвета задаются номерами ANSI (0–255) или hex "#RRGGBB"
-accent = "12"   # синий  — заголовки, рамки активного поля
-result = "14"   # cyan   — блок результата
+accent = "12"   # синий    — заголовки, рамки активного поля
+result = "14"   # cyan     — блок результата
 break  = "13"   # маджента — секция перерывов
-warn   = "11"   # жёлтый — предупреждения, грязная точка
+warn   = "11"   # жёлтый  — предупреждения, грязная точка
 
 [ui.timeouts]
 # Время (секунды) до автоматического скрытия статусных сообщений
@@ -183,4 +189,14 @@ func TimezoneLabel(timezone string) string {
 
 	name, _ := time.Now().In(loc).Zone()
 	return name
+}
+
+// CurrentTimeInZone возвращает текущее время в заданной зоне в формате "15:04".
+// Если timezone пустой или невалидный — возвращает локальное время.
+func CurrentTimeInZone(timezone string) string {
+	loc := TimezoneLocation(timezone)
+	if loc == nil {
+		loc = time.Local
+	}
+	return time.Now().In(loc).Format("15:04")
 }

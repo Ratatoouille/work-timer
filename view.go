@@ -79,20 +79,22 @@ func initStyles(cfg Config) {
 
 	modeNormalStyle = lipgloss.NewStyle().
 		Bold(true).
-		Foreground(colorSuccess).
+		Foreground(lipgloss.Color("0")).
+		Background(colorSuccess).
 		Padding(0, 1)
 
 	modeInsertStyle = lipgloss.NewStyle().
 		Bold(true).
-		Foreground(colorWarn).
+		Foreground(lipgloss.Color("0")).
+		Background(colorWarn).
 		Padding(0, 1)
 
 	headerDividerStyle = lipgloss.NewStyle().Foreground(colorMuted)
 	statusBarStyle = lipgloss.NewStyle().Foreground(colorMuted)
 
 	fileNameStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("7")).
-		Italic(true)
+		Foreground(lipgloss.Color("15")).
+		Bold(true)
 
 	dirtyDotStyle = lipgloss.NewStyle().Foreground(colorWarn)
 
@@ -135,7 +137,7 @@ func initStyles(cfg Config) {
 		PaddingTop(1)
 
 	controlKeyStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("7")).
+		Foreground(colorAccent).
 		Bold(true)
 
 	promptStyle = lipgloss.NewStyle().
@@ -205,32 +207,33 @@ func (m Model) renderHeader() string {
 		modeStr = m.locale.ModeInsert
 	}
 
-	title := headerStyle.Render("🕒 Work Timer")
-	mode := modeStyle.Render(modeStr)
-	sep := headerDividerStyle.Render("│")
-	hints := statusBarStyle.Render(m.locale.HeaderHints)
-	topLine := lipgloss.JoinHorizontal(lipgloss.Left, title, "  ", mode, " ", sep, " ", hints)
+	divW := m.dividerWidth()
+
+	title := headerStyle.Render("Work Timer")
+	badge := modeStyle.Render(" " + modeStr + " ")
+	topLine := "🕒  " + title + headerDividerStyle.Render("  │  ") + badge
 
 	var fileLine string
 	if m.saveFile != "" {
-		var dot string
+		dot := statusSuccessStyle.Render("◆")
 		if m.isDirty {
-			dot = dirtyDotStyle.Render("●")
-		} else {
-			dot = statusSuccessStyle.Render("●")
+			dot = dirtyDotStyle.Render("◆")
 		}
-		fileLine = "  " + dot + " " + fileNameStyle.Render(filepath.Base(m.saveFile))
+		fileLine = dot + "  " + fileNameStyle.Render(filepath.Base(m.saveFile))
 	} else {
-		fileLine = "  " + statusBarStyle.Render(m.locale.NoFileSelected)
+		fileLine = statusBarStyle.Render(m.locale.NoFileSelected)
 	}
 
-	divider := headerDividerStyle.Render(strings.Repeat("─", m.dividerWidth()))
-	return topLine + "\n" + fileLine + "\n" + divider + "\n"
+	hintsLine := statusBarStyle.Render(m.locale.HeaderHints)
+
+	divider := headerDividerStyle.Render(strings.Repeat("─", divW))
+	return topLine + "\n" + fileLine + "\n" + hintsLine + "\n" + divider + "\n"
 }
 
 func (m Model) renderSectionHeader(icon, title string, style lipgloss.Style) string {
 	text := style.Render(icon + " " + title)
-	line := sectionDividerStyle.Render(" " + strings.Repeat("─", 28))
+	lineLen := max(m.dividerWidth()-lipgloss.Width(text)-1, 2)
+	line := sectionDividerStyle.Render(" " + strings.Repeat("─", lineLen))
 	return "\n" + lipgloss.JoinHorizontal(lipgloss.Left, text, line) + "\n"
 }
 
@@ -289,12 +292,12 @@ func (m Model) renderStatusMessage() string {
 	}
 
 	var s string
-	switch {
-	case strings.HasPrefix(m.statusMessage, "✅"):
+	switch m.statusType {
+	case StatusSuccess:
 		s = statusSuccessStyle.Render(m.statusMessage)
-	case strings.HasPrefix(m.statusMessage, "❌"):
+	case StatusError:
 		s = statusErrorStyle.Render(m.statusMessage)
-	case strings.HasPrefix(m.statusMessage, "⚠"):
+	case StatusWarn:
 		s = statusWarnStyle.Render(m.statusMessage)
 	default:
 		s = statusBarStyle.Render(m.statusMessage)
@@ -325,25 +328,35 @@ func (m Model) renderResult() string {
 }
 
 func (m Model) renderControls() string {
-	keys := []struct{ key, desc string }{
-		{"j/k ↑↓", m.locale.CtrlNav},
-		{"i", m.locale.CtrlEdit},
-		{"a", m.locale.CtrlAdd},
-		{"d", m.locale.CtrlDel},
-		{"space", m.locale.CtrlToggle},
-		{"esc", m.locale.CtrlNormal},
-	}
-	if m.result != "" {
-		keys = append(keys, struct{ key, desc string }{"y", m.locale.CtrlCopy})
+	k := func(s string) string { return controlKeyStyle.Render(s) }
+	d := func(s string) string { return statusBarStyle.Render(s) }
+	dot := headerDividerStyle.Render("  ·  ")
+
+	divW := m.dividerWidth()
+
+	if m.mode == ModeInsert {
+		return controlsBarStyle.Width(divW).Render(k("esc") + "  " + d(m.locale.CtrlNormal))
 	}
 
-	var parts []string
-	for _, k := range keys {
-		parts = append(parts,
-			controlKeyStyle.Render("["+k.key+"]")+" "+statusBarStyle.Render(k.desc),
-		)
+	line1 := strings.Join([]string{
+		k("j/k") + "  " + d(m.locale.CtrlNav),
+		k("i") + "  " + d(m.locale.CtrlEdit),
+		k("esc") + "  " + d(m.locale.CtrlNormal),
+		k("space") + "  " + d(m.locale.CtrlToggle),
+		k("t") + "  " + d(m.locale.CtrlNow),
+	}, dot)
+
+	actions := []string{
+		k("a") + " / " + k("d") + "  " + d(m.locale.CtrlAdd+"/"+m.locale.CtrlDel),
+		k("s") + "  " + d(m.locale.CtrlSave),
+		k("o") + "  " + d(m.locale.CtrlOpen),
 	}
-	return controlsBarStyle.Render(strings.Join(parts, "  "))
+	if m.result != "" {
+		actions = append(actions, k("y")+"  "+d(m.locale.CtrlCopy))
+	}
+	line2 := strings.Join(actions, dot)
+
+	return controlsBarStyle.Width(divW).Render(line1 + "\n" + line2)
 }
 
 func (m Model) renderSavePrompt() string {
@@ -352,7 +365,7 @@ func (m Model) renderSavePrompt() string {
 		"\n\n" + m.filePathInput.View()
 
 	if m.statusMessage != "" {
-		if strings.HasPrefix(m.statusMessage, "✅") {
+		if m.statusType == StatusSuccess {
 			body += "\n\n" + statusSuccessStyle.Render(m.statusMessage)
 		} else {
 			body += "\n\n" + statusErrorStyle.Render(m.statusMessage)

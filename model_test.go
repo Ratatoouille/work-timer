@@ -24,9 +24,7 @@ func TestToAbsolutePath(t *testing.T) {
 		{
 			name:  "absolute path unchanged",
 			input: "/tmp/test.json",
-			check: func(s string) bool {
-				return s == "/tmp/test.json"
-			},
+			check: func(s string) bool { return s == "/tmp/test.json" },
 		},
 		{
 			name:  "relative path converted",
@@ -52,7 +50,7 @@ func TestToAbsolutePath(t *testing.T) {
 }
 
 func TestModelTotalFields(t *testing.T) {
-	m := NewModel("")
+	m := NewModelForTesting("")
 
 	// Initially 5 fields (start, workTime, worked, plan, addTZ)
 	if m.totalFields() != 5 {
@@ -73,7 +71,7 @@ func TestModelTotalFields(t *testing.T) {
 }
 
 func TestModelAddAndDeleteBreak(t *testing.T) {
-	m := NewModel("")
+	m := NewModelForTesting("")
 
 	if len(m.breaks) != 0 {
 		t.Errorf("Initial breaks = %v, want 0", len(m.breaks))
@@ -84,7 +82,12 @@ func TestModelAddAndDeleteBreak(t *testing.T) {
 		t.Errorf("After addBreak() = %v, want 1", len(m.breaks))
 	}
 
-	m.cursor = 5 // First break field (FieldBreaksStart)
+	if m.breaks[0].from.Placeholder != m.locale.PlaceholderTime {
+		t.Errorf("Break from placeholder = %q, want %q",
+			m.breaks[0].from.Placeholder, m.locale.PlaceholderTime)
+	}
+
+	m.cursor = 5
 	m.deleteCurrentBreak()
 	if len(m.breaks) != 0 {
 		t.Errorf("After deleteCurrentBreak() = %v, want 0", len(m.breaks))
@@ -92,7 +95,7 @@ func TestModelAddAndDeleteBreak(t *testing.T) {
 }
 
 func TestModelMoveCursor(t *testing.T) {
-	m := NewModel("")
+	m := NewModelForTesting("")
 
 	if m.cursor != 0 {
 		t.Errorf("Initial cursor = %v, want 0", m.cursor)
@@ -116,7 +119,7 @@ func TestModelMoveCursor(t *testing.T) {
 }
 
 func TestModelCurrentBreakIndex(t *testing.T) {
-	m := NewModel("")
+	m := NewModelForTesting("")
 	m.addBreak()
 	m.addBreak()
 
@@ -125,12 +128,12 @@ func TestModelCurrentBreakIndex(t *testing.T) {
 		wantIndex int
 		wantOk    bool
 	}{
-		{cursor: 0, wantIndex: 0, wantOk: false}, // FieldStartTime
-		{cursor: 4, wantIndex: 0, wantOk: false}, // FieldAddTZ
-		{cursor: 5, wantIndex: 0, wantOk: true},  // First break from
-		{cursor: 6, wantIndex: 0, wantOk: true},  // First break to
-		{cursor: 7, wantIndex: 1, wantOk: true},  // Second break from
-		{cursor: 8, wantIndex: 1, wantOk: true},  // Second break to
+		{cursor: 0, wantIndex: 0, wantOk: false},
+		{cursor: 4, wantIndex: 0, wantOk: false},
+		{cursor: 5, wantIndex: 0, wantOk: true},
+		{cursor: 6, wantIndex: 0, wantOk: true},
+		{cursor: 7, wantIndex: 1, wantOk: true},
+		{cursor: 8, wantIndex: 1, wantOk: true},
 	}
 
 	for _, tt := range tests {
@@ -146,7 +149,7 @@ func TestModelCurrentBreakIndex(t *testing.T) {
 }
 
 func TestModelRecalculate(t *testing.T) {
-	m := NewModel("")
+	m := NewModelForTesting("")
 	m.startTime.SetValue("09:00")
 	m.workTime.SetValue("08:00")
 
@@ -161,7 +164,7 @@ func TestModelRecalculate(t *testing.T) {
 }
 
 func TestModelRecalculateWithError(t *testing.T) {
-	m := NewModel("")
+	m := NewModelForTesting("")
 	m.startTime.SetValue("25:00")
 	m.workTime.SetValue("08:00")
 
@@ -176,7 +179,7 @@ func TestModelRecalculateWithError(t *testing.T) {
 }
 
 func TestModelRecalculateWorkedExceedsPlan(t *testing.T) {
-	m := NewModel("")
+	m := NewModelForTesting("")
 	m.startTime.SetValue("09:00")
 	m.worked.SetValue("10:00")
 	m.plan.SetValue("08:00")
@@ -192,7 +195,7 @@ func TestModelRecalculateWorkedExceedsPlan(t *testing.T) {
 }
 
 func TestModelIsDirtyOnEdit(t *testing.T) {
-	m := NewModel("")
+	m := NewModelForTesting("")
 
 	if m.isDirty {
 		t.Error("New model should not be dirty")
@@ -201,6 +204,78 @@ func TestModelIsDirtyOnEdit(t *testing.T) {
 	m.addBreak()
 	if !m.isDirty {
 		t.Error("Model should be dirty after addBreak()")
+	}
+}
+
+func TestModelSetStatus(t *testing.T) {
+	m := NewModelForTesting("")
+
+	m.setStatus("test success", StatusSuccess)
+	if m.statusMessage != "test success" {
+		t.Errorf("statusMessage = %q, want %q", m.statusMessage, "test success")
+	}
+	if m.statusType != StatusSuccess {
+		t.Errorf("statusType = %v, want StatusSuccess", m.statusType)
+	}
+
+	m.setStatus("test error", StatusError)
+	if m.statusType != StatusError {
+		t.Errorf("statusType = %v, want StatusError", m.statusType)
+	}
+
+	m.setStatus("test warn", StatusWarn)
+	if m.statusType != StatusWarn {
+		t.Errorf("statusType = %v, want StatusWarn", m.statusType)
+	}
+}
+
+func TestModelDefaultFileFromConfig(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "work-timer-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	testFile := filepath.Join(tmpDir, "default.json")
+	os.WriteFile(testFile, []byte(`{"start_time":"10:00","work_time":"08:00"}`), 0o644)
+
+	cfg := defaultConfig()
+	cfg.WorkDir = tmpDir
+	cfg.DefaultFile = testFile
+
+	m := newModelWithConfig("", cfg, localeEN)
+
+	if m.saveFile != testFile {
+		t.Errorf("saveFile = %q, want %q", m.saveFile, testFile)
+	}
+	if m.startTime.Value() != "10:00" {
+		t.Errorf("startTime = %q, want 10:00 (loaded from default_file)", m.startTime.Value())
+	}
+}
+
+func TestModelArgOverridesDefaultFile(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "work-timer-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	argFile := filepath.Join(tmpDir, "arg.json")
+	defaultFile := filepath.Join(tmpDir, "default.json")
+	os.WriteFile(argFile, []byte(`{"start_time":"09:00"}`), 0o644)
+	os.WriteFile(defaultFile, []byte(`{"start_time":"11:00"}`), 0o644)
+
+	cfg := defaultConfig()
+	cfg.WorkDir = tmpDir
+	cfg.DefaultFile = defaultFile
+
+	m := newModelWithConfig(argFile, cfg, localeEN)
+
+	if m.saveFile != argFile {
+		t.Errorf("saveFile = %q, want argFile %q", m.saveFile, argFile)
+	}
+	if m.startTime.Value() != "09:00" {
+		t.Errorf("startTime = %q, want 09:00 (from arg, not default_file)", m.startTime.Value())
 	}
 }
 
@@ -215,7 +290,7 @@ func TestModelLoadAvailableFiles(t *testing.T) {
 	os.WriteFile(filepath.Join(tmpDir, "test2.json"), []byte("{}"), 0o644)
 	os.WriteFile(filepath.Join(tmpDir, "readme.txt"), []byte(""), 0o644)
 
-	m := NewModel("")
+	m := NewModelForTesting("")
 	m.workDir = tmpDir
 	m.loadAvailableFiles()
 
