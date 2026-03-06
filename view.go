@@ -22,6 +22,7 @@ var (
 	fieldBoxStyle      lipgloss.Style
 	fieldActiveStyle   lipgloss.Style
 	fieldInactiveStyle lipgloss.Style
+	fieldErrorStyle    lipgloss.Style
 	containerStyle     lipgloss.Style
 	headerStyle        lipgloss.Style
 	modeNormalStyle    lipgloss.Style
@@ -67,6 +68,9 @@ func initStyles(cfg Config) {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(colorAccent)
 	fieldInactiveStyle = fieldBoxStyle
+	fieldErrorStyle = fieldBoxStyle.
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorError)
 
 	containerStyle = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -208,7 +212,6 @@ func (m Model) renderHeader() string {
 	}
 
 	divW := m.dividerWidth()
-
 	title := headerStyle.Render("Work Timer")
 	badge := modeStyle.Render(" " + modeStr + " ")
 	topLine := "🕒  " + title + headerDividerStyle.Render("  │  ") + badge
@@ -225,14 +228,16 @@ func (m Model) renderHeader() string {
 	}
 
 	hintsLine := statusBarStyle.Render(m.locale.HeaderHints)
-
 	divider := headerDividerStyle.Render(strings.Repeat("─", divW))
 	return topLine + "\n" + fileLine + "\n" + hintsLine + "\n" + divider + "\n"
 }
 
 func (m Model) renderSectionHeader(icon, title string, style lipgloss.Style) string {
 	text := style.Render(icon + " " + title)
-	lineLen := max(m.dividerWidth()-lipgloss.Width(text)-1, 2)
+	lineLen := m.dividerWidth() - lipgloss.Width(text) - 1
+	if lineLen < 2 {
+		lineLen = 2
+	}
 	line := sectionDividerStyle.Render(" " + strings.Repeat("─", lineLen))
 	return "\n" + lipgloss.JoinHorizontal(lipgloss.Left, text, line) + "\n"
 }
@@ -249,8 +254,8 @@ func (m Model) renderMainFields() string {
 
 	// Режим 2: отработано / план
 	b.WriteString("\n" + sectionDividerStyle.Render(m.locale.FieldMode2Label) + "\n")
-	b.WriteString(m.renderField(FieldWorked, m.locale.FieldWorked, m.worked) + "\n")
-	b.WriteString(m.renderField(FieldPlan, m.locale.FieldPlan, m.plan) + "\n")
+	b.WriteString(m.renderFieldDuration(FieldWorked, m.locale.FieldWorked, m.worked) + "\n")
+	b.WriteString(m.renderFieldDuration(FieldPlan, m.locale.FieldPlan, m.plan) + "\n")
 
 	b.WriteString("\n")
 
@@ -331,7 +336,6 @@ func (m Model) renderControls() string {
 	k := func(s string) string { return controlKeyStyle.Render(s) }
 	d := func(s string) string { return statusBarStyle.Render(s) }
 	dot := headerDividerStyle.Render("  ·  ")
-
 	divW := m.dividerWidth()
 
 	if m.mode == ModeInsert {
@@ -344,17 +348,18 @@ func (m Model) renderControls() string {
 		k("esc") + "  " + d(m.locale.CtrlNormal),
 		k("space") + "  " + d(m.locale.CtrlToggle),
 		k("t") + "  " + d(m.locale.CtrlNow),
+		k("x") + "  " + d(m.locale.CtrlClear),
 	}, dot)
 
-	actions := []string{
+	row2 := []string{
 		k("a") + " / " + k("d") + "  " + d(m.locale.CtrlAdd+"/"+m.locale.CtrlDel),
 		k("s") + "  " + d(m.locale.CtrlSave),
 		k("o") + "  " + d(m.locale.CtrlOpen),
 	}
 	if m.result != "" {
-		actions = append(actions, k("y")+"  "+d(m.locale.CtrlCopy))
+		row2 = append(row2, k("y")+"  "+d(m.locale.CtrlCopy))
 	}
-	line2 := strings.Join(actions, dot)
+	line2 := strings.Join(row2, dot)
 
 	return controlsBarStyle.Width(divW).Render(line1 + "\n" + line2)
 }
@@ -414,9 +419,30 @@ func (m Model) renderFileList() string {
 }
 
 func (m Model) renderField(index int, label string, input textinput.Model) string {
-	style := fieldInactiveStyle
-	if m.cursor == index {
+	var style lipgloss.Style
+	switch {
+	case m.cursor == index:
 		style = fieldActiveStyle
+	case isInvalidTimeValue(input.Value()):
+		style = fieldErrorStyle
+	default:
+		style = fieldInactiveStyle
+	}
+	return lipgloss.JoinHorizontal(lipgloss.Left,
+		labelStyle.Render(label),
+		style.Render(input.View()),
+	)
+}
+
+func (m Model) renderFieldDuration(index int, label string, input textinput.Model) string {
+	var style lipgloss.Style
+	switch {
+	case m.cursor == index:
+		style = fieldActiveStyle
+	case isInvalidDurationValue(input.Value()):
+		style = fieldErrorStyle
+	default:
+		style = fieldInactiveStyle
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Left,
 		labelStyle.Render(label),
@@ -441,4 +467,84 @@ func (m Model) renderCheckbox(index int, label string) string {
 
 func (m Model) renderHelp() string {
 	return helpBoxStyle.Render(fmt.Sprintf(m.locale.HelpText, ConfigPath, DefaultWorkDir))
+}
+
+// isInvalidTimeValue возвращает true если строка непустая и не является
+// корректным или частично набранным временем: [H]H:[M]M.
+func isInvalidTimeValue(s string) bool {
+	if s == "" {
+		return false
+	}
+	colonIdx := strings.Index(s, ":")
+	switch {
+	case colonIdx == -1:
+		if len(s) > 2 {
+			return true
+		}
+		for _, ch := range s {
+			if ch < '0' || ch > '9' {
+				return true
+			}
+		}
+		h := 0
+		for _, ch := range s {
+			h = h*10 + int(ch-'0')
+		}
+		return h > 23
+	case colonIdx == 1:
+		if s[0] < '0' || s[0] > '9' {
+			return true
+		}
+		return invalidMinutesSuffix(s[2:])
+	case colonIdx == 2:
+		if s[0] < '0' || s[0] > '9' || s[1] < '0' || s[1] > '9' {
+			return true
+		}
+		if (int(s[0]-'0'))*10+int(s[1]-'0') > 23 {
+			return true
+		}
+		return invalidMinutesSuffix(s[3:])
+	default:
+		return true
+	}
+}
+
+// invalidMinutesSuffix проверяет суффикс после двоеточия ("", "M", "MM").
+func invalidMinutesSuffix(s string) bool {
+	switch len(s) {
+	case 0:
+		return false
+	case 1:
+		return s[0] < '0' || s[0] > '5'
+	case 2:
+		return s[0] < '0' || s[0] > '5' || s[1] < '0' || s[1] > '9'
+	default:
+		return true
+	}
+}
+
+// isInvalidDurationValue — как isInvalidTimeValue, но часы могут быть любого
+// количества цифр (для полей "Отработано" и "План").
+func isInvalidDurationValue(s string) bool {
+	if s == "" {
+		return false
+	}
+	colonIdx := strings.Index(s, ":")
+	if colonIdx == -1 {
+		for _, ch := range s {
+			if ch < '0' || ch > '9' {
+				return true
+			}
+		}
+		return false
+	}
+	if colonIdx == 0 {
+		return true
+	}
+	for _, ch := range s[:colonIdx] {
+		if ch < '0' || ch > '9' {
+			return true
+		}
+	}
+	return invalidMinutesSuffix(s[colonIdx+1:])
 }

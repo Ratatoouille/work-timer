@@ -37,7 +37,8 @@ type Locale struct {
 	CtrlToggle string
 	CtrlNormal string
 	CtrlCopy   string
-	CtrlNow    string // клавиша t — вставить текущее время
+	CtrlNow    string
+	CtrlClear  string
 	CtrlSave   string
 	CtrlOpen   string
 
@@ -83,9 +84,7 @@ type Locale struct {
 	// --- Плейсхолдеры полей ввода ---
 	PlaceholderFile string
 	PlaceholderTime string
-
-	// --- Help ---
-	HelpText string
+	HelpText        string
 }
 
 var localeRU = Locale{
@@ -119,6 +118,7 @@ var localeRU = Locale{
 	CtrlNormal: "normal",
 	CtrlCopy:   "copy",
 	CtrlNow:    "сейчас",
+	CtrlClear:  "очистить",
 	CtrlSave:   "сохранить",
 	CtrlOpen:   "открыть",
 
@@ -169,7 +169,6 @@ Normal-режим:
   a            — добавить перерыв
   d            — удалить перерыв
   space        — toggle чекбокс
-  t            — вставить текущее время в поле "Начало"
   y            — скопировать результат
   s            — сохранить
   o            — открыть список файлов
@@ -229,6 +228,7 @@ var localeEN = Locale{
 	CtrlNormal: "normal",
 	CtrlCopy:   "copy",
 	CtrlNow:    "now",
+	CtrlClear:  "clear",
 	CtrlSave:   "save",
 	CtrlOpen:   "open",
 
@@ -279,7 +279,6 @@ Normal mode:
   a             — add break
   d             — delete break
   space         — toggle checkbox
-  t             — fill Start with current time
   y             — copy result
   s             — save
   o             — open file list

@@ -29,7 +29,7 @@ const (
 	HelpVisible
 )
 
-// StatusType используется вместо проверки emoji-префиксов в View.
+// StatusType определяет стиль отображения статусного сообщения.
 type StatusType int
 
 const (
@@ -72,7 +72,7 @@ type Model struct {
 	isDirty     bool
 	confirmQuit bool
 
-	// Config & locale
+	// Config
 	config Config
 	locale Locale
 
@@ -92,8 +92,9 @@ type Model struct {
 	fileListCursor int
 
 	// Calculation results
-	result string
-	err    string
+	result       string
+	err          string
+	lastSnapshot string
 
 	// Services
 	storage    *Storage
@@ -105,39 +106,21 @@ type Break struct {
 	to   textinput.Model
 }
 
-// setStatus устанавливает статусное сообщение с типом — вместо проверки emoji в View.
 func (m *Model) setStatus(msg string, t StatusType) {
 	m.statusMessage = msg
 	m.statusType = t
 }
 
-// NewModel — основной конструктор. Читает конфиг с диска.
 func NewModel(saveFile string) Model {
 	cfg := LoadConfig()
-	loc := LoadLocale(cfg.Language)
-	return newModelWithConfig(saveFile, cfg, loc)
-}
-
-// NewModelForTesting создаёт модель с дефолтным конфигом без обращения к диску.
-// Используется в тестах вместо NewModel.
-func NewModelForTesting(saveFile string) Model {
-	return newModelWithConfig(saveFile, defaultConfig(), localeEN)
-}
-
-// newModelWithConfig — внутренний конструктор, принимает готовые cfg и loc.
-func newModelWithConfig(saveFile string, cfg Config, loc Locale) Model {
 	initStyles(cfg)
+	loc := LoadLocale(cfg.Language)
 
 	fileInput := textinput.New()
 	fileInput.Placeholder = loc.PlaceholderFile
 	fileInput.Width = 40
 
 	workDir, _ := toAbsolutePath(cfg.WorkDir)
-
-	// Если аргумент не задан — пробуем default_file из конфига
-	if saveFile == "" && cfg.DefaultFile != "" {
-		saveFile = cfg.DefaultFile
-	}
 
 	if saveFile != "" {
 		if absPath, err := toAbsolutePath(saveFile); err == nil {
@@ -153,15 +136,21 @@ func newModelWithConfig(saveFile string, cfg Config, loc Locale) Model {
 		workDir:       workDir,
 		config:        cfg,
 		locale:        loc,
-		startTime:     createTimeInput(loc.PlaceholderTime),
-		workTime:      createTimeInput(loc.PlaceholderTime),
-		worked:        createTimeInput(loc.PlaceholderTime),
-		plan:          createTimeInput(loc.PlaceholderTime),
+		startTime:     createTimeInput(),
+		workTime:      createTimeInput(),
+		worked:        createDurationInput(),
+		plan:          createDurationInput(),
 		breaks:        []Break{},
 		filePathInput: fileInput,
 		storage:       NewStorage(saveFile),
 		calculator:    NewCalculator(loc),
 	}
+
+	// Плейсхолдеры полей ввода из локали
+	m.startTime.Placeholder = loc.PlaceholderTime
+	m.workTime.Placeholder = loc.PlaceholderTime
+	m.worked.Placeholder = loc.PlaceholderTime
+	m.plan.Placeholder = loc.PlaceholderTime
 
 	m.startTime.Focus()
 
@@ -174,10 +163,17 @@ func newModelWithConfig(saveFile string, cfg Config, loc Locale) Model {
 	return m
 }
 
-func createTimeInput(placeholder string) textinput.Model {
+func createTimeInput() textinput.Model {
 	ti := textinput.New()
-	ti.Placeholder = placeholder
 	ti.Width = 6
+	ti.CharLimit = 5 // формат чч:мм
+	return ti
+}
+
+func createDurationInput() textinput.Model {
+	ti := textinput.New()
+	ti.Width = 7
+	ti.CharLimit = 6 // формат ЧЧЧ:мм (до 999 часов)
 	return ti
 }
 
@@ -186,6 +182,7 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// --- Non-key messages ---------------------------------------------------
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -194,7 +191,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case clearStatusMsg:
 		m.statusMessage = ""
-		m.statusType = StatusNeutral
 		m.confirmQuit = false
 		return m, nil
 
@@ -208,14 +204,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// --- Global hotkeys -----------------------------------------------------
+	// --- Global hotkeys (work in all modes except file prompts) -------------
 	if m.mode != ModeSavePrompt && m.mode != ModeLoadPrompt && m.mode != ModeFileList {
 		switch keyMsg.String() {
 		case "q":
+			// If help is visible, just close it
 			if m.helpState == HelpVisible {
 				m.helpState = HelpHidden
 				return m, nil
 			}
+			// Dirty check: first q warns, second q quits
 			if m.isDirty && !m.confirmQuit {
 				m.confirmQuit = true
 				m.setStatus(m.locale.StatusUnsaved, StatusWarn)
@@ -240,10 +238,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// --- Help screen: eat all other keys ------------------------------------
 	if m.helpState == HelpVisible {
 		return m, nil
 	}
 
+	// --- Mode-specific handling ---------------------------------------------
 	var cmd tea.Cmd
 	switch m.mode {
 	case ModeNormal:
@@ -264,10 +264,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) updateNormalMode(msg tea.KeyMsg) (Model, tea.Cmd) {
+	// Any key resets the quit-confirm banner
 	if m.confirmQuit {
 		m.confirmQuit = false
 		m.statusMessage = ""
-		m.statusType = StatusNeutral
 	}
 
 	switch msg.String() {
@@ -294,12 +294,10 @@ func (m Model) updateNormalMode(msg tea.KeyMsg) (Model, tea.Cmd) {
 		}
 
 	case "t":
-		// Вставляем текущее время в поле "Начало"
-		if m.cursor == FieldStartTime {
-			now := CurrentTimeInZone(m.config.InputTimezone)
-			m.startTime.SetValue(now)
-			m.isDirty = true
-		}
+		m.fillCurrentWithNow()
+
+	case "x":
+		m.clearCurrentField()
 
 	case "s":
 		m.enterSaveMode()
@@ -321,6 +319,7 @@ func (m Model) updateInsertMode(msg tea.KeyMsg) (Model, tea.Cmd) {
 		m.mode = ModeNormal
 		m.blurAll()
 		m.focusCurrent()
+
 		return m, nil
 	}
 
@@ -361,6 +360,7 @@ func (m Model) updateSavePrompt(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.storage = NewStorage(absPath)
 			return m, m.saveStateCmd()
 		}
+
 		return m, nil
 
 	case "esc":
@@ -370,6 +370,7 @@ func (m Model) updateSavePrompt(msg tea.KeyMsg) (Model, tea.Cmd) {
 	}
 
 	m.filePathInput, cmd = m.filePathInput.Update(msg)
+
 	return m, cmd
 }
 
@@ -390,11 +391,12 @@ func (m Model) updateLoadPrompt(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.storage = NewStorage(absPath)
 			m.loadState()
 
-			if m.statusType == StatusSuccess {
+			if strings.HasPrefix(m.statusMessage, "✅") {
 				m.exitFileMode()
 				return m, clearStatusAfter(time.Duration(m.config.UI.Timeouts.Status) * time.Second)
 			}
 		}
+
 		return m, nil
 
 	case "esc":
@@ -404,6 +406,7 @@ func (m Model) updateLoadPrompt(msg tea.KeyMsg) (Model, tea.Cmd) {
 	}
 
 	m.filePathInput, cmd = m.filePathInput.Update(msg)
+
 	return m, cmd
 }
 
@@ -419,6 +422,7 @@ func (m Model) updateFileList(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.exitFileMode()
 			return m, clearStatusAfter(time.Duration(m.config.UI.Timeouts.Status) * time.Second)
 		}
+
 		return m, nil
 
 	case "esc":
@@ -445,13 +449,14 @@ func (m Model) updateFileList(msg tea.KeyMsg) (Model, tea.Cmd) {
 	return m, nil
 }
 
+// saveStateCmd выполняет сохранение и возвращает команду очистки статуса.
 func (m *Model) saveStateCmd() tea.Cmd {
 	data := SaveData{
 		StartTime: m.startTime.Value(),
 		WorkTime:  m.workTime.Value(),
 		Worked:    m.worked.Value(),
 		Plan:      m.plan.Value(),
-		AddTZ:     m.addTZ,
+		AddTZ:   m.addTZ,
 		Breaks:    m.getBreaksForSave(),
 	}
 
@@ -479,14 +484,12 @@ func (m *Model) enterSaveMode() {
 	}
 	m.filePathInput.Focus()
 	m.statusMessage = ""
-	m.statusType = StatusNeutral
 }
 
 func (m *Model) enterFileListMode() {
 	m.mode = ModeFileList
 	m.fileListCursor = 0
 	m.statusMessage = ""
-	m.statusType = StatusNeutral
 	m.loadAvailableFiles()
 }
 
@@ -516,6 +519,7 @@ func (m *Model) exitFileMode() {
 
 func (m *Model) moveCursor(delta int) {
 	newCursor := m.cursor + delta
+
 	if newCursor >= 0 && newCursor < m.totalFields() {
 		m.cursor = newCursor
 		m.blurAll()
@@ -524,27 +528,80 @@ func (m *Model) moveCursor(delta int) {
 }
 
 func (m *Model) addBreak() {
-	from := createTimeInput(m.locale.PlaceholderTime)
-	from.Blur()
+	br := Break{
+		from: createTimeInput(),
+		to:   createTimeInput(),
+	}
 
-	to := createTimeInput(m.locale.PlaceholderTime)
-	to.Blur()
-
-	m.breaks = append(m.breaks, Break{from: from, to: to})
+	br.from.Blur()
+	br.to.Blur()
+	m.breaks = append(m.breaks, br)
 	m.isDirty = true
 }
 
 func (m *Model) deleteCurrentBreak() {
 	if idx, ok := m.currentBreakIndex(); ok && idx < len(m.breaks) {
 		m.breaks = append(m.breaks[:idx], m.breaks[idx+1:]...)
+
 		if m.cursor > FieldAddTZ {
 			m.cursor--
 		}
+
 		m.isDirty = true
 	}
 }
 
+// fillCurrentWithNow вставляет текущее время в любое time-поле под курсором.
+func (m *Model) fillCurrentWithNow() {
+	if m.cursor == FieldAddTZ {
+		return
+	}
+	field := m.getCurrentField()
+	if field == nil {
+		return
+	}
+	now := CurrentTimeInZone(m.config.InputTimezone)
+	field.SetValue(now)
+	m.isDirty = true
+}
+
+// clearCurrentField очищает значение поля под курсором.
+// Не действует на чекбокс AddTZ.
+func (m *Model) clearCurrentField() {
+	if m.cursor == FieldAddTZ {
+		return
+	}
+	field := m.getCurrentField()
+	if field == nil {
+		return
+	}
+	if field.Value() == "" {
+		return
+	}
+	field.SetValue("")
+	m.isDirty = true
+}
+
 func (m *Model) recalculate() {
+	// Snapshot всех входных значений для пропуска лишних вычислений
+	var sb strings.Builder
+	sb.WriteString(m.startTime.Value()); sb.WriteByte('|')
+	sb.WriteString(m.workTime.Value()); sb.WriteByte('|')
+	sb.WriteString(m.worked.Value()); sb.WriteByte('|')
+	sb.WriteString(m.plan.Value()); sb.WriteByte('|')
+	if m.addTZ { sb.WriteByte('1') } else { sb.WriteByte('0') }
+	for _, br := range m.breaks {
+		sb.WriteByte('|')
+		sb.WriteString(br.from.Value())
+		sb.WriteByte('-')
+		sb.WriteString(br.to.Value())
+	}
+	snap := sb.String()
+	if snap == m.lastSnapshot {
+		return
+	}
+	m.lastSnapshot = snap
+
 	input := CalculationInput{
 		StartTime:     m.startTime.Value(),
 		WorkTime:      m.workTime.Value(),
@@ -569,12 +626,14 @@ func (m *Model) recalculate() {
 
 func (m Model) getBreaksData() []BreakTime {
 	breaks := make([]BreakTime, 0, len(m.breaks))
+
 	for _, br := range m.breaks {
 		breaks = append(breaks, BreakTime{
 			From: br.from.Value(),
 			To:   br.to.Value(),
 		})
 	}
+
 	return breaks
 }
 
@@ -589,16 +648,15 @@ func (m *Model) loadState() {
 	m.workTime.SetValue(data.WorkTime)
 	m.worked.SetValue(data.Worked)
 	m.plan.SetValue(data.Plan)
-	// Поддержка старых файлов с полем "add_four"
 	m.addTZ = data.AddTZ || data.LegacyAddFour
 
 	m.breaks = make([]Break, 0, len(data.Breaks))
 	for _, bd := range data.Breaks {
-		from := createTimeInput(m.locale.PlaceholderTime)
+		from := createTimeInput()
 		from.SetValue(bd.From)
 		from.Blur()
 
-		to := createTimeInput(m.locale.PlaceholderTime)
+		to := createTimeInput()
 		to.SetValue(bd.To)
 		to.Blur()
 
@@ -611,12 +669,14 @@ func (m *Model) loadState() {
 
 func (m Model) getBreaksForSave() []BreakData {
 	breaks := make([]BreakData, 0, len(m.breaks))
+
 	for _, br := range m.breaks {
 		breaks = append(breaks, BreakData{
 			From: br.from.Value(),
 			To:   br.to.Value(),
 		})
 	}
+
 	return breaks
 }
 
@@ -640,6 +700,7 @@ func (m *Model) getCurrentField() *textinput.Model {
 			return &m.breaks[idx].to
 		}
 	}
+
 	return nil
 }
 
@@ -676,6 +737,7 @@ func (m Model) currentBreakIndex() (int, bool) {
 	if m.cursor < FieldBreaksStart {
 		return 0, false
 	}
+
 	return (m.cursor - FieldBreaksStart) / 2, true
 }
 
@@ -683,6 +745,7 @@ func toggleHelpState(state HelpState) HelpState {
 	if state == HelpHidden {
 		return HelpVisible
 	}
+
 	return HelpHidden
 }
 
@@ -692,6 +755,7 @@ func toAbsolutePath(path string) (string, error) {
 		if err != nil {
 			return "", err
 		}
+
 		path = filepath.Join(homeDir, path[2:])
 	}
 
@@ -704,12 +768,14 @@ func toAbsolutePath(path string) (string, error) {
 
 // --- Commands ---------------------------------------------------------------
 
+// clearStatusAfter возвращает команду, которая через d очистит statusMessage.
 func clearStatusAfter(d time.Duration) tea.Cmd {
 	return tea.Tick(d, func(time.Time) tea.Msg {
 		return clearStatusMsg{}
 	})
 }
 
+// copyToClipboard копирует текст через OSC 52 (работает в большинстве терминалов).
 func copyToClipboard(text string) tea.Cmd {
 	return func() tea.Msg {
 		encoded := base64.StdEncoding.EncodeToString([]byte(text))
