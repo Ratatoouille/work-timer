@@ -165,31 +165,45 @@ func initStyles(cfg Config) {
 		Padding(1, 2)
 }
 
+// containerWidth возвращает ширину основного блока в зависимости от терминала.
+func (m Model) containerWidth() int {
+	w := m.width - 4
+	if w < 52 {
+		return 52
+	}
+	if w > 92 {
+		return 92
+	}
+	return w
+}
+
 func (m Model) dividerWidth() int {
-	w := m.width - 8
+	w := m.containerWidth() - 8
 	if w < 40 {
 		return 40
-	}
-	if w > 70 {
-		return 70
 	}
 	return w
 }
 
 func (m Model) View() string {
-	if m.helpState == HelpVisible {
-		return m.renderHelp()
+	var content string
+	switch {
+	case m.helpState == HelpVisible:
+		content = m.renderHelp()
+	case m.mode == ModeSavePrompt:
+		content = m.renderSavePrompt()
+	case m.mode == ModeLoadPrompt:
+		content = m.renderLoadPrompt()
+	case m.mode == ModeFileList:
+		content = m.renderFileList()
+	default:
+		content = containerStyle.Width(m.containerWidth()).Render(m.renderMain())
 	}
-	if m.mode == ModeSavePrompt {
-		return m.renderSavePrompt()
+
+	if m.width == 0 || m.height == 0 {
+		return content
 	}
-	if m.mode == ModeLoadPrompt {
-		return m.renderLoadPrompt()
-	}
-	if m.mode == ModeFileList {
-		return m.renderFileList()
-	}
-	return containerStyle.Render(m.renderMain())
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content)
 }
 
 func (m Model) renderMain() string {
