@@ -12,8 +12,8 @@ const ConfigPath = "~/.config/work_timer/config.toml"
 
 type Config struct {
 	WorkDir       string   `toml:"work_dir"`
-	DefaultFile   string   `toml:"default_file"`   // открывать при старте без аргумента
-	Language      string   `toml:"language"`       // "ru" (default) или "en"
+	DefaultFile   string   `toml:"default_file"` // открывать при старте без аргумента
+	Language      string   `toml:"language"`     // "ru" (default) или "en"
 	InputTimezone string   `toml:"input_timezone"`
 	Timezone      string   `toml:"timezone"`
 	UI            ConfigUI `toml:"ui"`
@@ -128,7 +128,7 @@ func writeDefaultConfig(absPath string) error {
 # https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
 
 # Рабочая папка для сохранений
-work_dir = "~/work_timer"
+work_dir = "~/.config/work_timer/dates"
 
 # Открывать этот файл при старте без аргумента командной строки.
 # Оставьте пустым чтобы каждый раз выбирать вручную.
