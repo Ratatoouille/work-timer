@@ -54,6 +54,8 @@ const DefaultWorkDir = "~/work_timer"
 
 type clearStatusMsg struct{}
 type clipboardCopiedMsg struct{}
+type tickMsg struct{}
+type autoSaveMsg struct{}
 
 // ----------------------------------------------------------------------------
 
@@ -85,18 +87,22 @@ type Model struct {
 	breaks    []Break
 
 	// File operation fields
-	filePathInput  textinput.Model
-	statusMessage  string
-	statusType     StatusType
-	availableFiles []string
-	allFiles       []string // все файлы для поиска
-	fileListCursor int
+	filePathInput   textinput.Model
+	statusMessage   string
+	statusType      StatusType
+	availableFiles  []string
+	allFiles        []string // все файлы для поиска
+	fileListCursor  int
 	fileSearchInput textinput.Model
 
 	// Calculation results
 	result       string
 	err          string
 	lastSnapshot string
+
+	// Timer
+	timerRunning bool
+	currentTime  time.Time
 
 	// Services
 	storage    *Storage
@@ -135,22 +141,22 @@ func NewModel(saveFile string) Model {
 	}
 
 	m := Model{
-		mode:          ModeNormal,
-		helpState:     HelpHidden,
-		cursor:        0,
-		saveFile:      saveFile,
-		workDir:       workDir,
-		config:        cfg,
-		locale:        loc,
-		startTime:     createTimeInput(),
-		workTime:      createTimeInput(),
-		worked:        createDurationInput(),
-		plan:          createDurationInput(),
-		breaks:        []Break{},
-		filePathInput: fileInput,
+		mode:            ModeNormal,
+		helpState:       HelpHidden,
+		cursor:          0,
+		saveFile:        saveFile,
+		workDir:         workDir,
+		config:          cfg,
+		locale:          loc,
+		startTime:       createTimeInput(),
+		workTime:        createTimeInput(),
+		worked:          createDurationInput(),
+		plan:            createDurationInput(),
+		breaks:          []Break{},
+		filePathInput:   fileInput,
 		fileSearchInput: fileSearchInput,
-		storage:       NewStorage(saveFile),
-		calculator:    NewCalculator(loc),
+		storage:         NewStorage(saveFile),
+		calculator:      NewCalculator(loc),
 	}
 
 	// Плейсхолдеры полей ввода из локали
@@ -185,7 +191,13 @@ func createDurationInput() textinput.Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return textinput.Blink
+	return tea.Batch(textinput.Blink, tick())
+}
+
+func tick() tea.Cmd {
+	return tea.Tick(time.Second, func(time.Time) tea.Msg {
+		return tickMsg{}
+	})
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -204,6 +216,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case clipboardCopiedMsg:
 		m.setStatus(m.locale.StatusCopied, StatusSuccess)
 		return m, clearStatusAfter(time.Duration(m.config.UI.Timeouts.Clipboard) * time.Second)
+
+	case tickMsg:
+		m.currentTime = time.Now()
+		return m, tick()
 	}
 
 	keyMsg, ok := msg.(tea.KeyMsg)
@@ -287,6 +303,12 @@ func (m Model) updateNormalMode(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 	case "k", "up":
 		m.moveCursor(-1)
+
+	case "alt+right":
+		m.jumpToNextBreak()
+
+	case "alt+left":
+		m.jumpToPrevBreak()
 
 	case "a":
 		m.addBreak()
@@ -477,7 +499,7 @@ func (m *Model) saveStateCmd() tea.Cmd {
 		WorkTime:  m.workTime.Value(),
 		Worked:    m.worked.Value(),
 		Plan:      m.plan.Value(),
-		AddTZ:   m.addTZ,
+		AddTZ:     m.addTZ,
 		Breaks:    m.getBreaksForSave(),
 	}
 
@@ -592,6 +614,46 @@ func (m *Model) deleteCurrentBreak() {
 	}
 }
 
+func (m *Model) jumpToNextBreak() {
+	if len(m.breaks) == 0 {
+		return
+	}
+	// Если уже на последнем поле, переходим к первому перерыву
+	if m.cursor >= FieldBreaksStart {
+		// Если это последнее поле перерыва, переходим к началу
+		if m.cursor >= FieldBreaksStart + len(m.breaks)*2 - 1 {
+			m.cursor = FieldBreaksStart
+		} else {
+			// Иначе переходим к следующему полю
+			m.cursor++
+		}
+		m.blurAll()
+		m.focusCurrent()
+	} else {
+		// Если в основном блоке, переходим к первому перерыву
+		m.cursor = FieldBreaksStart
+		m.blurAll()
+		m.focusCurrent()
+	}
+}
+
+func (m *Model) jumpToPrevBreak() {
+	if m.cursor < FieldBreaksStart {
+		return
+	}
+	// Если это первое поле перерывов, возвращаемся в основной блок
+	if m.cursor == FieldBreaksStart {
+		m.cursor = FieldStartTime
+		m.blurAll()
+		m.focusCurrent()
+	} else {
+		// Иначе переходим к предыдущему полю
+		m.cursor--
+		m.blurAll()
+		m.focusCurrent()
+	}
+}
+
 // fillCurrentWithNow вставляет текущее время в любое time-поле под курсором.
 func (m *Model) fillCurrentWithNow() {
 	if m.cursor == FieldAddTZ {
@@ -626,11 +688,19 @@ func (m *Model) clearCurrentField() {
 func (m *Model) recalculate() {
 	// Snapshot всех входных значений для пропуска лишних вычислений
 	var sb strings.Builder
-	sb.WriteString(m.startTime.Value()); sb.WriteByte('|')
-	sb.WriteString(m.workTime.Value()); sb.WriteByte('|')
-	sb.WriteString(m.worked.Value()); sb.WriteByte('|')
-	sb.WriteString(m.plan.Value()); sb.WriteByte('|')
-	if m.addTZ { sb.WriteByte('1') } else { sb.WriteByte('0') }
+	sb.WriteString(m.startTime.Value())
+	sb.WriteByte('|')
+	sb.WriteString(m.workTime.Value())
+	sb.WriteByte('|')
+	sb.WriteString(m.worked.Value())
+	sb.WriteByte('|')
+	sb.WriteString(m.plan.Value())
+	sb.WriteByte('|')
+	if m.addTZ {
+		sb.WriteByte('1')
+	} else {
+		sb.WriteByte('0')
+	}
 	for _, br := range m.breaks {
 		sb.WriteByte('|')
 		sb.WriteString(br.from.Value())

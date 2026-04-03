@@ -59,16 +59,16 @@ func (c *Calculator) Calculate(input CalculationInput) (string, error) {
 
 func (c *Calculator) calculateRemainingTime(input CalculationInput) (time.Duration, error) {
 	if input.WorkTime != "" {
-		return c.parseDuration(input.WorkTime)
+		return c.ParseDuration(input.WorkTime)
 	}
 
 	if input.Worked != "" && input.Plan != "" {
-		worked, err := c.parseDuration(input.Worked)
+		worked, err := c.ParseDuration(input.Worked)
 		if err != nil {
 			return 0, fmt.Errorf("%s", c.locale.ErrInvalidWorked)
 		}
 
-		plan, err := c.parseDuration(input.Plan)
+		plan, err := c.ParseDuration(input.Plan)
 		if err != nil {
 			return 0, fmt.Errorf("%s", c.locale.ErrInvalidPlan)
 		}
@@ -168,7 +168,7 @@ func (c *Calculator) parseTime(value string) (time.Time, error) {
 	return time.Date(0, 1, 1, hours, minutes, 0, 0, time.UTC), nil
 }
 
-func (c *Calculator) parseDuration(value string) (time.Duration, error) {
+func (c *Calculator) ParseDuration(value string) (time.Duration, error) {
 	parts := strings.Split(value, ":")
 	if len(parts) != 2 {
 		return 0, fmt.Errorf("%s", c.locale.ErrInvalidDuration)

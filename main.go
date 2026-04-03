@@ -7,7 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-const version = "1.2.0"
+const version = "1.5.0"
 
 func main() {
 	saveFile := ""

@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/lipgloss"
@@ -213,6 +215,7 @@ func (m Model) renderMain() string {
 	b.WriteString(m.renderBreaks())
 	b.WriteString(m.renderStatusMessage())
 	b.WriteString(m.renderResult())
+	b.WriteString(m.renderProgressBar())
 	b.WriteString(m.renderControls())
 	return b.String()
 }
@@ -344,6 +347,180 @@ func (m Model) renderResult() string {
 	}
 
 	return b.String()
+}
+
+func (m Model) renderProgressBar() string {
+	if m.err != "" || m.result == "" {
+		return ""
+	}
+
+	// Получаем текущее время
+	now := m.currentTime
+	if now.IsZero() {
+		now = time.Now()
+	}
+
+	// Парсим время окончания из result
+	endTimeStr := strings.TrimSpace(strings.TrimPrefix(m.result, "⏰ "))
+	endTimeStr = strings.TrimSpace(endTimeStr)
+	
+	// Парсим время окончания (формат HH:MM)
+	parts := strings.Split(endTimeStr, " ")
+	if len(parts) == 0 {
+		return ""
+	}
+	
+	timePart := parts[0]
+	timeParts := strings.Split(timePart, ":")
+	if len(timeParts) != 2 {
+		return ""
+	}
+
+	endHour, err := strconv.Atoi(timeParts[0])
+	if err != nil {
+		return ""
+	}
+	endMin, err := strconv.Atoi(timeParts[1])
+	if err != nil {
+		return ""
+	}
+
+	// Определяем локаль для endTime
+	var endLoc *time.Location
+	if m.addTZ && m.config.Timezone != "" {
+		// Если флаг addTZ=true, используем целевую timezone
+		endLoc = TimezoneLocation(m.config.Timezone)
+		if endLoc == nil {
+			endLoc = time.Local
+		}
+	} else {
+		// Иначе используем input timezone
+		endLoc = TimezoneLocation(m.config.InputTimezone)
+		if endLoc == nil {
+			endLoc = time.Local
+		}
+	}
+
+	// Создаём время окончания
+	endTime := time.Date(now.Year(), now.Month(), now.Day(), endHour, endMin, 0, 0, endLoc)
+	
+	// Если endTime раньше чем now (в той же зоне), значит это завтра
+	if endTime.Before(now) {
+		endTime = endTime.AddDate(0, 0, 1)
+	}
+
+	// Начало работы (из start_time)
+	startTimeStr := m.startTime.Value()
+	if startTimeStr == "" {
+		return ""
+	}
+	
+	startParts := strings.Split(startTimeStr, ":")
+	if len(startParts) != 2 {
+		return ""
+	}
+	
+	startHour, err := strconv.Atoi(startParts[0])
+	if err != nil {
+		return ""
+	}
+	startMin, err := strconv.Atoi(startParts[1])
+	if err != nil {
+		return ""
+	}
+
+	// Используем input timezone для start
+	startLoc := TimezoneLocation(m.config.InputTimezone)
+	if startLoc == nil {
+		startLoc = time.Local
+	}
+
+	// Создаём время начала
+	startTime := time.Date(now.Year(), now.Month(), now.Day(), startHour, startMin, 0, 0, startLoc)
+	
+	// Если startTime позже endTime, значит начало было вчера
+	if startTime.After(endTime) {
+		startTime = startTime.AddDate(0, 0, -1)
+	}
+
+	// Конвертируем в одну зону для расчёта
+	now = now.In(endLoc)
+	startTime = startTime.In(endLoc)
+	
+	// Считаем длительности
+	totalDuration := endTime.Sub(startTime)
+	elapsedDuration := now.Sub(startTime)
+	
+	// Вычитаем перерывы из elapsed
+	breaksDur := m.getBreaksDuration()
+	elapsedDuration = elapsedDuration - breaksDur
+	
+	if elapsedDuration < 0 {
+		elapsedDuration = 0
+	}
+	
+	if totalDuration <= 0 {
+		return ""
+	}
+
+	// Вычисляем прогресс
+	progress := float64(elapsedDuration) / float64(totalDuration)
+	if progress > 1.0 {
+		progress = 1.0
+	}
+	if progress < 0 {
+		progress = 0
+	}
+
+	// Рисуем прогресс-бар
+	barWidth := m.dividerWidth() - 10
+	if barWidth < 20 {
+		barWidth = 20
+	}
+
+	filled := int(progress * float64(barWidth))
+	if filled > barWidth {
+		filled = barWidth
+	}
+	if filled < 0 {
+		filled = 0
+	}
+
+	bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
+	percent := int(progress * 100)
+
+	// Прошедшее время (с учётом перерывов)
+	elapsedStr := formatDuration(elapsedDuration)
+	
+	return "\n" + sectionDividerStyle.Render(fmt.Sprintf(" %s  [%s] %d%%", bar, elapsedStr, percent)) + "\n"
+}
+
+func (m Model) getBreaksDuration() time.Duration {
+	total := time.Duration(0)
+	for _, br := range m.breaks {
+		fromStr := br.from.Value()
+		toStr := br.to.Value()
+		if fromStr == "" || toStr == "" {
+			continue
+		}
+		// Парим время начала и конца перерыва как HH:MM
+		from, err := time.Parse("15:04", fromStr)
+		if err != nil {
+			continue
+		}
+		to, err := time.Parse("15:04", toStr)
+		if err != nil {
+			continue
+		}
+		total += to.Sub(from)
+	}
+	return total
+}
+
+func formatDuration(d time.Duration) string {
+	hours := int(d.Hours())
+	minutes := int(d.Minutes()) % 60
+	return fmt.Sprintf("%dч %dмин", hours, minutes)
 }
 
 func (m Model) renderControls() string {
