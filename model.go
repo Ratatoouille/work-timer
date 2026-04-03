@@ -89,7 +89,9 @@ type Model struct {
 	statusMessage  string
 	statusType     StatusType
 	availableFiles []string
+	allFiles       []string // все файлы для поиска
 	fileListCursor int
+	fileSearchInput textinput.Model
 
 	// Calculation results
 	result       string
@@ -120,6 +122,10 @@ func NewModel(saveFile string) Model {
 	fileInput.Placeholder = loc.PlaceholderFile
 	fileInput.Width = 40
 
+	fileSearchInput := textinput.New()
+	fileSearchInput.Placeholder = "search files"
+	fileSearchInput.Width = 30
+
 	workDir, _ := toAbsolutePath(cfg.WorkDir)
 
 	if saveFile != "" {
@@ -142,6 +148,7 @@ func NewModel(saveFile string) Model {
 		plan:          createDurationInput(),
 		breaks:        []Break{},
 		filePathInput: fileInput,
+		fileSearchInput: fileSearchInput,
 		storage:       NewStorage(saveFile),
 		calculator:    NewCalculator(loc),
 	}
@@ -444,6 +451,20 @@ func (m Model) updateFileList(msg tea.KeyMsg) (Model, tea.Cmd) {
 		m.mode = ModeLoadPrompt
 		m.filePathInput.SetValue("")
 		m.filePathInput.Focus()
+
+	case "/":
+		m.fileSearchInput.SetValue("")
+		m.fileSearchInput.Focus()
+
+	default:
+		// Обработка ввода символов для поиска
+		if m.fileSearchInput.Focused() {
+			var cmd tea.Cmd
+			m.fileSearchInput, cmd = m.fileSearchInput.Update(msg)
+			m.filterFiles()
+			m.fileListCursor = 0
+			return m, cmd
+		}
 	}
 
 	return m, nil
@@ -497,6 +518,7 @@ func (m *Model) loadAvailableFiles() {
 	entries, err := os.ReadDir(m.workDir)
 	if err != nil {
 		m.availableFiles = []string{}
+		m.allFiles = []string{}
 		return
 	}
 
@@ -507,13 +529,32 @@ func (m *Model) loadAvailableFiles() {
 		}
 	}
 
+	m.allFiles = files
 	m.availableFiles = files
+}
+
+func (m *Model) filterFiles() {
+	searchTerm := strings.ToLower(m.fileSearchInput.Value())
+	if searchTerm == "" {
+		m.availableFiles = m.allFiles
+		return
+	}
+
+	filtered := []string{}
+	for _, file := range m.allFiles {
+		if strings.Contains(strings.ToLower(file), searchTerm) {
+			filtered = append(filtered, file)
+		}
+	}
+	m.availableFiles = filtered
 }
 
 func (m *Model) exitFileMode() {
 	m.mode = ModeNormal
 	m.filePathInput.Blur()
 	m.filePathInput.SetValue("")
+	m.fileSearchInput.Blur()
+	m.fileSearchInput.SetValue("")
 	m.focusCurrent()
 }
 

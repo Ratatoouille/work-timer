@@ -425,3 +425,126 @@ func TestClearCurrentField(t *testing.T) {
 		t.Error("clearCurrentField() on break field should mark dirty")
 	}
 }
+
+func TestFilterFiles(t *testing.T) {
+	m := NewModel("")
+	m.allFiles = []string{"test1.json", "test2.json", "work.json", "archive.json"}
+
+	// Пустой поиск — все файлы
+	m.fileSearchInput.SetValue("")
+	m.filterFiles()
+	if len(m.availableFiles) != 4 {
+		t.Errorf("filterFiles() with empty search = %v files, want 4", len(m.availableFiles))
+	}
+
+	// Поиск по "test"
+	m.fileSearchInput.SetValue("test")
+	m.filterFiles()
+	if len(m.availableFiles) != 2 {
+		t.Errorf("filterFiles() with 'test' = %v files, want 2", len(m.availableFiles))
+	}
+
+	// Поиск по "work"
+	m.fileSearchInput.SetValue("work")
+	m.filterFiles()
+	if len(m.availableFiles) != 1 {
+		t.Errorf("filterFiles() with 'work' = %v files, want 1", len(m.availableFiles))
+	}
+
+	// Поиск без результатов
+	m.fileSearchInput.SetValue("nonexistent")
+	m.filterFiles()
+	if len(m.availableFiles) != 0 {
+		t.Errorf("filterFiles() with no matches = %v files, want 0", len(m.availableFiles))
+	}
+}
+
+func TestFilterFilesCaseInsensitive(t *testing.T) {
+	m := NewModel("")
+	m.allFiles = []string{"Test1.json", "TEST2.json", "work.json"}
+
+	m.fileSearchInput.SetValue("test")
+	m.filterFiles()
+	if len(m.availableFiles) != 2 {
+		t.Errorf("filterFiles() case insensitive = %v files, want 2", len(m.availableFiles))
+	}
+
+	m.fileSearchInput.SetValue("WORK")
+	m.filterFiles()
+	if len(m.availableFiles) != 1 {
+		t.Errorf("filterFiles() case insensitive upper = %v files, want 1", len(m.availableFiles))
+	}
+}
+
+func TestUpdateFileListWithSearch(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "work-timer-search-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	os.WriteFile(filepath.Join(tmpDir, "project1.json"), []byte("{}"), 0o644)
+	os.WriteFile(filepath.Join(tmpDir, "project2.json"), []byte("{}"), 0o644)
+	os.WriteFile(filepath.Join(tmpDir, "backup.json"), []byte("{}"), 0o644)
+
+	m := NewModel("")
+	m.workDir = tmpDir
+	m.mode = ModeFileList
+	m.loadAvailableFiles()
+
+	if len(m.allFiles) != 3 {
+		t.Errorf("loadAvailableFiles() = %v files, want 3", len(m.allFiles))
+	}
+
+	// Фильтрация через search input
+	m.fileSearchInput.SetValue("project")
+	m.filterFiles()
+
+	if len(m.availableFiles) != 2 {
+		t.Errorf("After search 'project' = %v files, want 2", len(m.availableFiles))
+	}
+}
+
+func TestExitFileModeResetsSearch(t *testing.T) {
+	m := NewModel("")
+	m.fileSearchInput.SetValue("search text")
+	m.fileSearchInput.Focus()
+
+	m.exitFileMode()
+
+	if m.fileSearchInput.Value() != "" {
+		t.Error("exitFileMode() should clear search input")
+	}
+	if m.fileSearchInput.Focused() {
+		t.Error("exitFileMode() should blur search input")
+	}
+}
+
+func TestLoadAvailableFilesInitializesAllFiles(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "work-timer-init-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	os.WriteFile(filepath.Join(tmpDir, "file1.json"), []byte("{}"), 0o644)
+	os.WriteFile(filepath.Join(tmpDir, "file2.json"), []byte("{}"), 0o644)
+
+	m := NewModel("")
+	m.workDir = tmpDir
+	m.loadAvailableFiles()
+
+	if len(m.allFiles) != 2 {
+		t.Errorf("allFiles = %v, want 2", len(m.allFiles))
+	}
+	if len(m.availableFiles) != 2 {
+		t.Errorf("availableFiles = %v, want 2", len(m.availableFiles))
+	}
+
+	// allFiles и availableFiles должны содержать одинаковые файлы
+	for i, f := range m.allFiles {
+		if f != m.availableFiles[i] {
+			t.Errorf("allFiles[%d] = %q, availableFiles[%d] = %q", i, f, i, m.availableFiles[i])
+		}
+	}
+}

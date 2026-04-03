@@ -413,6 +413,11 @@ func (m Model) renderFileList() string {
 	divider := sectionDividerStyle.Render(strings.Repeat("─", 40))
 	b.WriteString(divider + "\n")
 
+	// Поле поиска
+	searchLabel := statusBarStyle.Render("Search: ")
+	b.WriteString(searchLabel + m.fileSearchInput.View() + "\n\n")
+	b.WriteString(divider + "\n")
+
 	if len(m.availableFiles) == 0 {
 		b.WriteString("\n  " + statusBarStyle.Render(m.locale.FileListEmpty) + "\n\n")
 		b.WriteString(divider + "\n\n")

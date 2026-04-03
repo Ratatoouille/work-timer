@@ -130,7 +130,7 @@ var localeRU = Locale{
 	FileListTitle:   "📂 Выберите файл",
 	FileListEmpty:   "Нет сохранённых файлов",
 	FileListHintNew: "[n] создать новый  [Esc] отмена",
-	FileListHint:    "[j/k ↑↓] навигация  [Enter] выбрать  [n] новый  [Esc] отмена",
+	FileListHint:    "[j/k ↑↓] навигация  [Enter] выбрать  [/] поиск  [n] новый  [Esc] отмена",
 
 	StatusCopied:        "✅ Скопировано в буфер обмена",
 	StatusUnsaved:       "⚠  Есть несохранённые изменения. Нажмите q ещё раз для выхода",
@@ -179,6 +179,7 @@ Insert-режим:
 
 Выбор файла:
   j/k или ↑/↓  — навигация по списку
+  /             — поиск файлов
   Enter        — загрузить выбранный файл
   n            — создать новый файл
   Esc          — отмена
@@ -240,7 +241,7 @@ var localeEN = Locale{
 	FileListTitle:   "📂 Select file",
 	FileListEmpty:   "No saved files",
 	FileListHintNew: "[n] create new  [Esc] cancel",
-	FileListHint:    "[j/k ↑↓] navigate  [Enter] select  [n] new  [Esc] cancel",
+	FileListHint:    "[j/k ↑↓] navigate  [Enter] select  [/] search  [n] new  [Esc] cancel",
 
 	StatusCopied:        "✅ Copied to clipboard",
 	StatusUnsaved:       "⚠  Unsaved changes. Press q again to quit",
@@ -289,6 +290,7 @@ Insert mode:
 
 File selection:
   j/k or ↑/↓   — navigate list
+  /             — search files
   Enter         — load selected file
   n             — create new file
   Esc           — cancel
