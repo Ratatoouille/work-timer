@@ -200,6 +200,8 @@ func (m Model) View() tea.View {
 		content = m.renderFileList()
 	case m.mode == ModePresetList:
 		content = m.renderPresetList()
+	case m.mode == ModeHistory:
+		content = m.renderHistory()
 	default:
 		content = containerStyle.Width(m.containerWidth()).Render(m.renderMain())
 	}
@@ -650,6 +652,45 @@ func (m Model) renderPresetList() string {
 	divider := sectionDividerStyle.Render(strings.Repeat("─", 40))
 	b.WriteString(divider + "\n\n")
 	b.WriteString(statusBarStyle.Render(m.locale.PresetHint))
+	return promptStyle.Render(b.String())
+}
+
+func (m Model) renderHistory() string {
+	var b strings.Builder
+	b.WriteString(headerStyle.Render(m.locale.HistoryTitle) + "\n\n")
+
+	if len(m.historyEntries) == 0 {
+		b.WriteString("\n  " + statusBarStyle.Render(m.locale.HistoryEmpty) + "\n\n")
+	} else {
+		// Заголовок таблицы
+		header := fmt.Sprintf("%-12s %-6s %-8s %-10s %-6s",
+			m.locale.HistoryColDate, m.locale.HistoryColStart,
+			m.locale.HistoryColEnd, m.locale.HistoryColBreak,
+			m.locale.HistoryColSaved)
+		b.WriteString(statusBarStyle.Render(header) + "\n")
+
+		divW := max(m.dividerWidth(), 50)
+		b.WriteString(sectionDividerStyle.Render(strings.Repeat("─", divW)) + "\n")
+
+		for i, e := range m.historyEntries {
+			breaksInfo := e.BreaksDur
+			if e.Breaks > 0 {
+				breaksInfo = fmt.Sprintf("%s (%d)", e.BreaksDur, e.Breaks)
+			}
+			line := fmt.Sprintf("%-12s %-6s %-8s %-10s %-6s",
+				e.Date, e.StartTime, e.EndTime, breaksInfo, e.SavedAt)
+			if i == m.historyCursor {
+				b.WriteString(fileListItemActiveStyle.Render("▶ "+line) + "\n")
+			} else {
+				b.WriteString(fileListItemStyle.Render("  "+line) + "\n")
+			}
+		}
+		b.WriteString("\n")
+	}
+
+	divider := sectionDividerStyle.Render(strings.Repeat("─", 40))
+	b.WriteString(divider + "\n\n")
+	b.WriteString(statusBarStyle.Render(m.locale.HistoryHint))
 	return promptStyle.Render(b.String())
 }
 

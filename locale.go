@@ -53,6 +53,14 @@ type Locale struct {
 	PresetTitle     string
 	PresetEmpty     string
 	PresetHint      string
+	HistoryTitle    string
+	HistoryEmpty    string
+	HistoryHint     string
+	HistoryColDate  string
+	HistoryColStart string
+	HistoryColEnd   string
+	HistoryColBreak string
+	HistoryColSaved string
 
 	// --- Статусные сообщения ---
 	StatusCopied        string
@@ -138,6 +146,14 @@ var localeRU = Locale{
 	PresetTitle:     "☕ Добавить перерыв из шаблона",
 	PresetEmpty:     "Шаблоны перерывов не настроены",
 	PresetHint:      "[j/k ↑↓] выбрать  [Enter] добавить  [Esc] отмена",
+	HistoryTitle:    "📜 История рабочих дней",
+	HistoryEmpty:    "История пуста",
+	HistoryHint:     "[j/k ↑↓] навигация  [Enter] открыть файл  [Esc] отмена",
+	HistoryColDate:  "Дата",
+	HistoryColStart: "Начало",
+	HistoryColEnd:   "Конец",
+	HistoryColBreak: "Перерывы",
+	HistoryColSaved: "Сохр.",
 
 	StatusCopied:        "✅ Скопировано в буфер обмена",
 	StatusUnsaved:       "⚠  Есть несохранённые изменения. Нажмите q ещё раз для выхода",
@@ -181,6 +197,7 @@ Normal-режим:
   a            — добавить перерыв
   p            — добавить перерыв из шаблона
   d            — удалить перерыв
+  H            — история рабочих дней
   space        — переключить чекбокс
   y            — скопировать результат
   s            — сохранить
@@ -258,6 +275,14 @@ var localeEN = Locale{
 	PresetTitle:     "☕ Add break from preset",
 	PresetEmpty:     "No break presets configured",
 	PresetHint:      "[j/k ↑↓] select  [Enter] add  [Esc] cancel",
+	HistoryTitle:    "📜 Work day history",
+	HistoryEmpty:    "History is empty",
+	HistoryHint:     "[j/k ↑↓] navigate  [Enter] open file  [Esc] cancel",
+	HistoryColDate:  "Date",
+	HistoryColStart: "Start",
+	HistoryColEnd:   "End",
+	HistoryColBreak: "Breaks",
+	HistoryColSaved: "Saved",
 
 	StatusCopied:        "✅ Copied to clipboard",
 	StatusUnsaved:       "⚠  Unsaved changes. Press q again to quit",
@@ -301,6 +326,7 @@ Normal mode:
   a             — add break
   p             — add break from preset
   d             — delete break
+  H             — work day history
   space         — toggle checkbox
   y             — copy result
   s             — save
