@@ -22,6 +22,7 @@ const (
 	ModeLoadPrompt
 	ModeFileList
 	ModePresetList
+	ModeHistory
 )
 
 type HelpState int
@@ -99,6 +100,8 @@ type Model struct {
 	renameInput      textinput.Model
 	renaming         bool
 	presetCursor     int
+	historyEntries   []HistoryEntry
+	historyCursor    int
 
 	// Calculation results
 	result       string
@@ -256,7 +259,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	// --- Global hotkeys (work in all modes except file prompts) -------------
-	if m.mode != ModeSavePrompt && m.mode != ModeLoadPrompt && m.mode != ModeFileList && m.mode != ModePresetList {
+	if m.mode != ModeSavePrompt && m.mode != ModeLoadPrompt && m.mode != ModeFileList && m.mode != ModePresetList && m.mode != ModeHistory {
 		switch keyMsg.String() {
 		case "q":
 			// If help is visible, just close it
@@ -309,6 +312,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m, cmd = m.updateFileList(keyMsg)
 	case ModePresetList:
 		m, cmd = m.updatePresetList(keyMsg)
+	case ModeHistory:
+		m, cmd = m.updateHistoryMode(keyMsg)
 	}
 
 	m.recalculate()
@@ -348,6 +353,9 @@ func (m Model) updateNormalMode(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.mode = ModePresetList
 			m.presetCursor = 0
 		}
+
+	case "H":
+		m.enterHistoryMode()
 
 	case "d":
 		m.deleteCurrentBreak()
@@ -661,6 +669,56 @@ func (m *Model) addBreakPreset(preset BreakPreset) {
 	m.isDirty = true
 }
 
+func (m *Model) enterHistoryMode() {
+	m.mode = ModeHistory
+	m.historyCursor = 0
+	histStorage := NewHistoryStorage(m.workDir)
+	entries, err := histStorage.Load()
+	if err != nil {
+		m.historyEntries = []HistoryEntry{}
+	} else {
+		m.historyEntries = entries
+	}
+}
+
+func (m Model) updateHistoryMode(msg tea.KeyMsg) (Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		if len(m.historyEntries) > 0 && m.historyCursor < len(m.historyEntries) {
+			entry := m.historyEntries[m.historyCursor]
+			if entry.FileName != "" {
+				filePath := filepath.Join(m.workDir, entry.FileName)
+				if _, err := os.Stat(filePath); err == nil {
+					m.saveFile = filePath
+					m.storage = NewStorage(filePath)
+					m.loadState()
+					m.exitFileMode()
+					return m, clearStatusAfter(time.Duration(m.config.UI.Timeouts.Status) * time.Second)
+				}
+			}
+		}
+		return m, nil
+
+	case "esc", "q":
+		m.mode = ModeNormal
+		m.statusMessage = ""
+		m.focusCurrent()
+		return m, nil
+
+	case "j", "down":
+		if m.historyCursor < len(m.historyEntries)-1 {
+			m.historyCursor++
+		}
+
+	case "k", "up":
+		if m.historyCursor > 0 {
+			m.historyCursor--
+		}
+	}
+
+	return m, nil
+}
+
 // saveStateCmd выполняет сохранение и возвращает команду очистки статуса.
 func (m *Model) saveStateCmd() tea.Cmd {
 	data := SaveData{
@@ -678,6 +736,7 @@ func (m *Model) saveStateCmd() tea.Cmd {
 	}
 
 	m.isDirty = false
+	m.recordHistory()
 	m.setStatus(fmt.Sprintf(m.locale.StatusSavedAs, filepath.Base(m.saveFile)), StatusSuccess)
 
 	if m.mode == ModeSavePrompt {
