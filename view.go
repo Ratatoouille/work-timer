@@ -445,8 +445,6 @@ func (m Model) progressInfo() (percent float64, elapsed, remaining time.Duration
 		}
 	}
 
-	endTime := time.Date(now.Year(), now.Month(), now.Day(), endHour, endMin, 0, 0, endLoc)
-
 	startTimeStr := m.startTime.Value()
 	if startTimeStr == "" {
 		return 0, 0, 0, false
@@ -471,41 +469,38 @@ func (m Model) progressInfo() (percent float64, elapsed, remaining time.Duration
 		startLoc = time.Local
 	}
 
-	// Строим кандидатов: start и end могут быть на разных днях.
-	// Перебираем смещения дней для start относительно end и выбираем окно,
-	// в которое попадает now. Если now после всех вариантов — работа окончена.
-	endCandidates := []time.Time{endTime, endTime.AddDate(0, 0, 1)}
 	nowIn := now.In(endLoc)
 
-	var bestStart, bestEnd time.Time
-	var found bool
+	// Строим end на today, start на today.
+	endToday := time.Date(nowIn.Year(), nowIn.Month(), nowIn.Day(), endHour, endMin, 0, 0, endLoc)
+	startToday := time.Date(nowIn.Year(), nowIn.Month(), nowIn.Day(), startHour, startMin, 0, 0, startLoc).In(endLoc)
 
-	for _, ec := range endCandidates {
-		for _, dayOffset := range []int{0, -1, -2} {
-			sc := time.Date(ec.Year(), ec.Month(), ec.Day(), startHour, startMin, 0, 0, startLoc).In(endLoc)
-			sc = sc.AddDate(0, 0, dayOffset)
-			if !sc.Before(ec) {
-				continue
-			}
-			if !nowIn.Before(sc) && !nowIn.After(ec) {
-				bestStart = sc
-				bestEnd = ec
-				found = true
-				break
-			}
-		}
-		if found {
-			break
-		}
+	// Если end <= start — ночная смена, end на завтра.
+	if !endToday.After(startToday) {
+		endToday = endToday.AddDate(0, 0, 1)
 	}
 
-	if !found {
-		// now после всех окон — рабочий день окончен, 100%
-		// Берём последнее окно (конец сегодня) для расчёта elapsed.
-		bestEnd = endTime
-		bestStart = time.Date(endTime.Year(), endTime.Month(), endTime.Day(), startHour, startMin, 0, 0, startLoc).In(endLoc)
-		if !bestStart.Before(bestEnd) {
-			bestStart = bestStart.AddDate(0, 0, -1)
+	var bestStart, bestEnd time.Time
+
+	switch {
+	case !nowIn.Before(startToday) && !nowIn.After(endToday):
+		// now внутри окна
+		bestStart = startToday
+		bestEnd = endToday
+	case nowIn.After(endToday):
+		// now после конца — рабочий день окончен
+		bestStart = startToday
+		bestEnd = endToday
+	default:
+		// now до начала — день ещё не начался.
+		// Проверим вчерашнее окно (если работа началась вчера).
+		startYesterday := startToday.AddDate(0, 0, -1)
+		endYesterday := endToday.AddDate(0, 0, -1)
+		if !nowIn.Before(startYesterday) && !nowIn.After(endYesterday) {
+			bestStart = startYesterday
+			bestEnd = endYesterday
+		} else {
+			return 0, 0, 0, false
 		}
 	}
 

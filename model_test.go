@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestToAbsolutePath(t *testing.T) {
@@ -546,5 +547,141 @@ func TestLoadAvailableFilesInitializesAllFiles(t *testing.T) {
 		if f != m.availableFiles[i] {
 			t.Errorf("allFiles[%d] = %q, availableFiles[%d] = %q", i, f, i, m.availableFiles[i])
 		}
+	}
+}
+
+// newProgressTestModel создаёт Model с UTC timezone и заданным start/result/now.
+func newProgressTestModel(start, result string, now time.Time) Model {
+	m := NewModel("")
+	m.config.InputTimezone = "UTC"
+	m.config.Timezone = ""
+	m.locale = localeEN
+	m.calculator = NewCalculator(localeEN)
+	m.startTime.SetValue(start)
+	m.result = result
+	m.err = ""
+	m.currentTime = now
+	return m
+}
+
+func TestProgressInfoMidDay(t *testing.T) {
+	// 09:00–17:00, now=13:00 → 50%
+	now := time.Date(2025, 1, 15, 13, 0, 0, 0, time.UTC)
+	m := newProgressTestModel("09:00", "17:00", now)
+
+	percent, elapsed, remaining, ok := m.progressInfo()
+	if !ok {
+		t.Fatal("progressInfo() ok = false, want true")
+	}
+	if percent < 0.49 || percent > 0.51 {
+		t.Errorf("percent = %.2f, want ~0.50", percent)
+	}
+	if elapsed != 4*time.Hour {
+		t.Errorf("elapsed = %v, want 4h", elapsed)
+	}
+	if remaining != 4*time.Hour {
+		t.Errorf("remaining = %v, want 4h", remaining)
+	}
+}
+
+func TestProgressInfoStart(t *testing.T) {
+	// now == start → 0%
+	now := time.Date(2025, 1, 15, 9, 0, 0, 0, time.UTC)
+	m := newProgressTestModel("09:00", "17:00", now)
+
+	percent, _, _, ok := m.progressInfo()
+	if !ok {
+		t.Fatal("progressInfo() ok = false, want true")
+	}
+	if percent > 0.01 {
+		t.Errorf("percent = %.2f, want ~0.0", percent)
+	}
+}
+
+func TestProgressInfoEnd(t *testing.T) {
+	// now == end → 100%
+	now := time.Date(2025, 1, 15, 17, 0, 0, 0, time.UTC)
+	m := newProgressTestModel("09:00", "17:00", now)
+
+	percent, _, _, ok := m.progressInfo()
+	if !ok {
+		t.Fatal("progressInfo() ok = false, want true")
+	}
+	if percent < 0.99 {
+		t.Errorf("percent = %.2f, want ~1.0", percent)
+	}
+}
+
+func TestProgressInfoAfterEnd(t *testing.T) {
+	// now after end → 100%
+	now := time.Date(2025, 1, 15, 18, 0, 0, 0, time.UTC)
+	m := newProgressTestModel("09:00", "17:00", now)
+
+	percent, _, _, ok := m.progressInfo()
+	if !ok {
+		t.Fatal("progressInfo() ok = false, want true")
+	}
+	if percent != 1.0 {
+		t.Errorf("percent = %.2f, want 1.0", percent)
+	}
+}
+
+func TestProgressInfoBeforeStart(t *testing.T) {
+	// now before start → ok=false
+	now := time.Date(2025, 1, 15, 8, 0, 0, 0, time.UTC)
+	m := newProgressTestModel("09:00", "17:00", now)
+
+	_, _, _, ok := m.progressInfo()
+	if ok {
+		t.Error("progressInfo() before start should return ok=false")
+	}
+}
+
+func TestProgressInfoNoResult(t *testing.T) {
+	m := newProgressTestModel("09:00", "", time.Now())
+	_, _, _, ok := m.progressInfo()
+	if ok {
+		t.Error("progressInfo() with empty result should return ok=false")
+	}
+}
+
+func TestProgressInfoWithError(t *testing.T) {
+	m := newProgressTestModel("09:00", "17:00", time.Now())
+	m.err = "some error"
+	_, _, _, ok := m.progressInfo()
+	if ok {
+		t.Error("progressInfo() with error should return ok=false")
+	}
+}
+
+func TestProgressInfoNightShift(t *testing.T) {
+	// 22:00–06:00 next day, now=02:00 → ~50%
+	now := time.Date(2025, 1, 16, 2, 0, 0, 0, time.UTC)
+	m := newProgressTestModel("22:00", "06:00", now)
+
+	percent, _, _, ok := m.progressInfo()
+	if !ok {
+		t.Fatal("progressInfo() night shift ok = false, want true")
+	}
+	if percent < 0.49 || percent > 0.51 {
+		t.Errorf("percent = %.2f, want ~0.50", percent)
+	}
+}
+
+func TestProgressInfoWithBreaks(t *testing.T) {
+	// 09:00–17:00 with 1h break, now=13:00
+	// total=8h, elapsed=4h, break=1h → elapsed-break=3h, percent=3/8=0.375
+	now := time.Date(2025, 1, 15, 13, 0, 0, 0, time.UTC)
+	m := newProgressTestModel("09:00", "17:00", now)
+	m.addBreak()
+	m.breaks[0].from.SetValue("12:00")
+	m.breaks[0].to.SetValue("13:00")
+
+	percent, _, _, ok := m.progressInfo()
+	if !ok {
+		t.Fatal("progressInfo() with breaks ok = false, want true")
+	}
+	if percent < 0.37 || percent > 0.38 {
+		t.Errorf("percent = %.2f, want ~0.375", percent)
 	}
 }
