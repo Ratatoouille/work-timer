@@ -65,6 +65,7 @@ type Locale struct {
 	StatusDeleteError   string // "❌ Ошибка удаления: %s"
 	StatusRenamed       string // "✅ Переименовано: %s → %s"
 	StatusRenameError   string // "❌ Ошибка переименования: %s"
+	StatusDayEnded      string
 
 	// --- Ошибки калькулятора ---
 	ErrInvalidStartTime    string
@@ -145,6 +146,7 @@ var localeRU = Locale{
 	StatusDeleteError:   "❌ Ошибка удаления: %s",
 	StatusRenamed:       "✅ Переименовано: %s → %s",
 	StatusRenameError:   "❌ Ошибка переименования: %s",
+	StatusDayEnded:      "🎉 Рабочий день окончен!",
 
 	ErrInvalidStartTime:    "неверное время начала",
 	ErrInvalidWorked:       "неверный формат 'отработано'",
@@ -260,6 +262,7 @@ var localeEN = Locale{
 	StatusDeleteError:   "❌ Delete error: %s",
 	StatusRenamed:       "✅ Renamed: %s → %s",
 	StatusRenameError:   "❌ Rename error: %s",
+	StatusDayEnded:      "🎉 Work day is over!",
 
 	ErrInvalidStartTime:    "invalid start time",
 	ErrInvalidWorked:       "invalid format for 'worked'",
