@@ -68,34 +68,6 @@ func TestStorageSaveAndLoad(t *testing.T) {
 	}
 }
 
-func TestStorageBackwardCompatAddFour(t *testing.T) {
-	// Старые файлы используют "add_four": true — должны читаться корректно
-	tmpDir, err := os.MkdirTemp("", "work-timer-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	testFile := filepath.Join(tmpDir, "legacy.json")
-	legacy := `{"start_time":"09:00","work_time":"08:00","add_four":true,"breaks":[]}`
-	os.WriteFile(testFile, []byte(legacy), 0o644)
-
-	storage := NewStorage(testFile)
-	data, err := storage.Load()
-	if err != nil {
-		t.Fatalf("Load() error = %v", err)
-	}
-
-	// LegacyAddFour должен быть true
-	if !data.LegacyAddFour {
-		t.Error("LegacyAddFour should be true for old files with add_four=true")
-	}
-	// новое поле должно быть false (не задано в старом файле)
-	if data.AddTZ {
-		t.Error("AddTZ should be false for old files without add_tz field")
-	}
-}
-
 func TestStorageNewFileUsesAddTZ(t *testing.T) {
 	// Новые файлы должны писать "add_tz", а не "add_four"
 	tmpDir, err := os.MkdirTemp("", "work-timer-test-*")

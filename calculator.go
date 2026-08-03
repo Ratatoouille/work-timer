@@ -115,6 +115,30 @@ func (c *Calculator) calculateBreaksDuration(breaks []BreakTime, workStart, _ ti
 	return total, nil
 }
 
+// BreaksDuration вычисляет суммарную длительность перерывов.
+// СInvalid перерывы (пустые или неверный формат) пропускаются.
+func (c *Calculator) BreaksDuration(breaks []BreakTime) time.Duration {
+	total := time.Duration(0)
+	for _, br := range breaks {
+		if br.From == "" || br.To == "" {
+			continue
+		}
+		from, err := c.parseTime(br.From)
+		if err != nil {
+			continue
+		}
+		to, err := c.parseTime(br.To)
+		if err != nil {
+			continue
+		}
+		if to.Before(from) || to.Equal(from) {
+			continue
+		}
+		total += to.Sub(from)
+	}
+	return total
+}
+
 func (c *Calculator) formatResult(endTime time.Time, addTZ bool, inputTimezone, timezone string) (string, error) {
 	if !addTZ {
 		return endTime.Format("15:04"), nil
