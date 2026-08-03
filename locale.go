@@ -50,6 +50,9 @@ type Locale struct {
 	FileListHint    string
 	ConfirmDelete   string
 	RenamePrompt    string
+	PresetTitle     string
+	PresetEmpty     string
+	PresetHint      string
 
 	// --- Статусные сообщения ---
 	StatusCopied        string
@@ -132,6 +135,9 @@ var localeRU = Locale{
 	FileListHint:    "[j/k ↑↓] навигация  [Enter] выбрать  [/] поиск  [d] удалить  [r] переименовать  [n] новый  [Esc] отмена",
 	ConfirmDelete:   "⚠  Удалить %s? [y] да  [n/Esc] отмена",
 	RenamePrompt:    "✏  Новое имя:",
+	PresetTitle:     "☕ Добавить перерыв из шаблона",
+	PresetEmpty:     "Шаблоны перерывов не настроены",
+	PresetHint:      "[j/k ↑↓] выбрать  [Enter] добавить  [Esc] отмена",
 
 	StatusCopied:        "✅ Скопировано в буфер обмена",
 	StatusUnsaved:       "⚠  Есть несохранённые изменения. Нажмите q ещё раз для выхода",
@@ -173,6 +179,7 @@ Normal-режим:
   j/k или ↑/↓  — перемещение
   i            — Insert режим
   a            — добавить перерыв
+  p            — добавить перерыв из шаблона
   d            — удалить перерыв
   space        — переключить чекбокс
   y            — скопировать результат
@@ -248,6 +255,9 @@ var localeEN = Locale{
 	FileListHint:    "[j/k ↑↓] navigate  [Enter] select  [/] search  [d] delete  [r] rename  [n] new  [Esc] cancel",
 	ConfirmDelete:   "⚠  Delete %s? [y] yes  [n/Esc] cancel",
 	RenamePrompt:    "✏  New name:",
+	PresetTitle:     "☕ Add break from preset",
+	PresetEmpty:     "No break presets configured",
+	PresetHint:      "[j/k ↑↓] select  [Enter] add  [Esc] cancel",
 
 	StatusCopied:        "✅ Copied to clipboard",
 	StatusUnsaved:       "⚠  Unsaved changes. Press q again to quit",
@@ -289,6 +299,7 @@ Normal mode:
   j/k or ↑/↓   — navigate
   i             — Insert mode
   a             — add break
+  p             — add break from preset
   d             — delete break
   space         — toggle checkbox
   y             — copy result

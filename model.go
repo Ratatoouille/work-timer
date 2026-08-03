@@ -21,6 +21,7 @@ const (
 	ModeSavePrompt
 	ModeLoadPrompt
 	ModeFileList
+	ModePresetList
 )
 
 type HelpState int
@@ -97,6 +98,7 @@ type Model struct {
 	confirmDelete    bool
 	renameInput      textinput.Model
 	renaming         bool
+	presetCursor     int
 
 	// Calculation results
 	result       string
@@ -254,7 +256,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	// --- Global hotkeys (work in all modes except file prompts) -------------
-	if m.mode != ModeSavePrompt && m.mode != ModeLoadPrompt && m.mode != ModeFileList {
+	if m.mode != ModeSavePrompt && m.mode != ModeLoadPrompt && m.mode != ModeFileList && m.mode != ModePresetList {
 		switch keyMsg.String() {
 		case "q":
 			// If help is visible, just close it
@@ -305,6 +307,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m, cmd = m.updateLoadPrompt(keyMsg)
 	case ModeFileList:
 		m, cmd = m.updateFileList(keyMsg)
+	case ModePresetList:
+		m, cmd = m.updatePresetList(keyMsg)
 	}
 
 	m.recalculate()
@@ -338,6 +342,12 @@ func (m Model) updateNormalMode(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 	case "a":
 		m.addBreak()
+
+	case "p":
+		if len(m.config.Breaks) > 0 {
+			m.mode = ModePresetList
+			m.presetCursor = 0
+		}
 
 	case "d":
 		m.deleteCurrentBreak()
@@ -605,6 +615,50 @@ func (m Model) updateRenameMode(msg tea.KeyMsg) (Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.renameInput, cmd = m.renameInput.Update(msg)
 	return m, cmd
+}
+
+func (m Model) updatePresetList(msg tea.KeyMsg) (Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		if m.presetCursor < len(m.config.Breaks) {
+			preset := m.config.Breaks[m.presetCursor]
+			m.addBreakPreset(preset)
+			m.mode = ModeNormal
+			m.focusCurrent()
+		}
+		return m, nil
+
+	case "esc":
+		m.mode = ModeNormal
+		m.statusMessage = ""
+		m.focusCurrent()
+		return m, nil
+
+	case "j", "down":
+		if m.presetCursor < len(m.config.Breaks)-1 {
+			m.presetCursor++
+		}
+
+	case "k", "up":
+		if m.presetCursor > 0 {
+			m.presetCursor--
+		}
+	}
+
+	return m, nil
+}
+
+func (m *Model) addBreakPreset(preset BreakPreset) {
+	br := Break{
+		from: createTimeInput(),
+		to:   createTimeInput(),
+	}
+	br.from.SetValue(preset.From)
+	br.to.SetValue(preset.To)
+	br.from.Blur()
+	br.to.Blur()
+	m.breaks = append(m.breaks, br)
+	m.isDirty = true
 }
 
 // saveStateCmd выполняет сохранение и возвращает команду очистки статуса.

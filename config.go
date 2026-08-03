@@ -12,12 +12,19 @@ import (
 const ConfigPath = "~/.config/work_timer/config.toml"
 
 type Config struct {
-	WorkDir       string   `toml:"work_dir"`
-	DefaultFile   string   `toml:"default_file"` // открывать при старте без аргумента
-	Language      string   `toml:"language"`     // "ru" (default) или "en"
-	InputTimezone string   `toml:"input_timezone"`
-	Timezone      string   `toml:"timezone"`
-	UI            ConfigUI `toml:"ui"`
+	WorkDir       string        `toml:"work_dir"`
+	DefaultFile   string        `toml:"default_file"` // открывать при старте без аргумента
+	Language      string        `toml:"language"`     // "ru" (default) или "en"
+	InputTimezone string        `toml:"input_timezone"`
+	Timezone      string        `toml:"timezone"`
+	Breaks        []BreakPreset `toml:"breaks"`
+	UI            ConfigUI      `toml:"ui"`
+}
+
+type BreakPreset struct {
+	Name string `toml:"name"`
+	From string `toml:"from"`
+	To   string `toml:"to"`
 }
 
 type ConfigUI struct {
@@ -46,6 +53,10 @@ func defaultConfig() Config {
 		Language:      "ru",
 		InputTimezone: "Europe/Moscow",
 		Timezone:      "",
+		Breaks: []BreakPreset{
+			{Name: "lunch", From: "12:00", To: "13:00"},
+			{Name: "coffee", From: "15:00", To: "15:15"},
+		},
 		UI: ConfigUI{
 			LabelWidth: 22,
 			Colors: ConfigColors{
@@ -160,6 +171,17 @@ input_timezone = "Europe/Moscow"
 # Оставьте пустым чтобы не конвертировать.
 # Примеры: "Asia/Krasnoyarsk", "Europe/Moscow", "America/New_York"
 timezone = ""
+
+# Шаблоны перерывов. Добавляются клавишей p в Normal-режиме.
+# [[breaks]]
+# name = "lunch"
+# from = "12:00"
+# to = "13:00"
+
+# [[breaks]]
+# name = "coffee"
+# from = "15:00"
+# to = "15:15"
 
 [ui]
 # Ширина колонки лейблов (символов)
