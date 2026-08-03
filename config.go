@@ -12,13 +12,14 @@ import (
 const ConfigPath = "~/.config/work_timer/config.toml"
 
 type Config struct {
-	WorkDir       string        `toml:"work_dir"`
-	DefaultFile   string        `toml:"default_file"` // открывать при старте без аргумента
-	Language      string        `toml:"language"`     // "ru" (default) или "en"
-	InputTimezone string        `toml:"input_timezone"`
-	Timezone      string        `toml:"timezone"`
-	Breaks        []BreakPreset `toml:"breaks"`
-	UI            ConfigUI      `toml:"ui"`
+	WorkDir       string            `toml:"work_dir"`
+	DefaultFile   string            `toml:"default_file"`
+	Language      string            `toml:"language"`
+	InputTimezone string            `toml:"input_timezone"`
+	Timezone      string            `toml:"timezone"`
+	Breaks        []BreakPreset     `toml:"breaks"`
+	QuickInputs   map[string]string `toml:"quick_inputs"`
+	UI            ConfigUI          `toml:"ui"`
 }
 
 type BreakPreset struct {
@@ -56,6 +57,10 @@ func defaultConfig() Config {
 		Breaks: []BreakPreset{
 			{Name: "lunch", From: "12:00", To: "13:00"},
 			{Name: "coffee", From: "15:00", To: "15:15"},
+		},
+		QuickInputs: map[string]string{
+			"1": "08:00",
+			"2": "09:00",
 		},
 		UI: ConfigUI{
 			LabelWidth: 22,
@@ -182,6 +187,11 @@ timezone = ""
 # name = "coffee"
 # from = "15:00"
 # to = "15:15"
+
+# Быстрый ввод: клавиши 1-9 в Normal-режиме вставляют значение в текущее поле.
+# [quick_inputs]
+# "1" = "08:00"
+# "2" = "09:00"
 
 [ui]
 # Ширина колонки лейблов (символов)
