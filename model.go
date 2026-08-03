@@ -106,6 +106,8 @@ type Model struct {
 	// Timer
 	timerRunning bool
 	currentTime  time.Time
+	dayEnded     bool
+	notified     bool
 
 	// Services
 	storage    *Storage
@@ -242,6 +244,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tickMsg:
 		m.currentTime = time.Now()
+		m.checkDayEnd()
 		return m, tick()
 	}
 
@@ -817,6 +820,31 @@ func (m *Model) clearCurrentField() {
 	}
 	field.SetValue("")
 	m.isDirty = true
+}
+
+// checkDayEnd проверяет, перешло ли текущее время через расчётное время окончания.
+// Если день окончен — ставит флаг dayEnded и (однократно) уведомляет.
+func (m *Model) checkDayEnd() {
+	if m.err != "" || m.result == "" {
+		return
+	}
+
+	percent, _, _, ok := m.progressInfo()
+	if !ok {
+		return
+	}
+
+	if percent >= 1.0 {
+		m.dayEnded = true
+		if !m.notified {
+			m.notified = true
+			m.setStatus(m.locale.StatusDayEnded, StatusSuccess)
+			fmt.Print("\a")
+		}
+	} else {
+		m.dayEnded = false
+		m.notified = false
+	}
 }
 
 func (m *Model) recalculate() {
