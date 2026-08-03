@@ -586,7 +586,15 @@ func (m Model) renderFileList() string {
 			}
 		}
 		b.WriteString("\n" + divider + "\n\n")
-		b.WriteString(statusBarStyle.Render(m.locale.FileListHint))
+
+		if m.renaming {
+			b.WriteString(statusBarStyle.Render(m.locale.RenamePrompt+" ") + m.renameInput.View() + "\n\n")
+			b.WriteString(statusBarStyle.Render("[Enter] rename  [Esc] cancel"))
+		} else if m.confirmDelete && m.statusMessage != "" {
+			b.WriteString(statusWarnStyle.Render(m.statusMessage))
+		} else {
+			b.WriteString(statusBarStyle.Render(m.locale.FileListHint))
+		}
 	}
 	return promptStyle.Render(b.String())
 }

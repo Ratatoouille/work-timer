@@ -87,13 +87,16 @@ type Model struct {
 	breaks    []Break
 
 	// File operation fields
-	filePathInput   textinput.Model
-	statusMessage   string
-	statusType      StatusType
-	availableFiles  []string
-	allFiles        []string // все файлы для поиска
-	fileListCursor  int
-	fileSearchInput textinput.Model
+	filePathInput    textinput.Model
+	statusMessage    string
+	statusType       StatusType
+	availableFiles   []string
+	allFiles         []string // все файлы для поиска
+	fileListCursor   int
+	fileSearchInput  textinput.Model
+	confirmDelete    bool
+	renameInput      textinput.Model
+	renaming         bool
 
 	// Calculation results
 	result       string
@@ -137,6 +140,10 @@ func NewModel(saveFile string) Model {
 	fileSearchInput.Placeholder = "search files"
 	fileSearchInput.SetWidth(30)
 
+	renameInput := textinput.New()
+	renameInput.Placeholder = "new_name.json"
+	renameInput.SetWidth(40)
+
 	workDir, _ := toAbsolutePath(cfg.WorkDir)
 
 	if saveFile != "" {
@@ -166,6 +173,7 @@ func NewModel(saveFile string) Model {
 		breaks:          []Break{},
 		filePathInput:   fileInput,
 		fileSearchInput: fileSearchInput,
+		renameInput:     renameInput,
 		storage:         NewStorage(saveFile),
 		calculator:      NewCalculator(loc),
 	}
@@ -455,6 +463,38 @@ func (m Model) updateLoadPrompt(msg tea.KeyMsg) (Model, tea.Cmd) {
 }
 
 func (m Model) updateFileList(msg tea.KeyMsg) (Model, tea.Cmd) {
+	// --- Rename mode ---
+	if m.renaming {
+		return m.updateRenameMode(msg)
+	}
+
+	// --- Delete confirmation ---
+	if m.confirmDelete {
+		switch msg.String() {
+		case "y", "enter":
+			if len(m.availableFiles) > 0 && m.fileListCursor < len(m.availableFiles) {
+				selectedFile := m.availableFiles[m.fileListCursor]
+				filePath := filepath.Join(m.workDir, selectedFile)
+				if err := os.Remove(filePath); err != nil {
+					m.setStatus(fmt.Sprintf(m.locale.StatusDeleteError, err.Error()), StatusError)
+				} else {
+					m.setStatus(fmt.Sprintf(m.locale.StatusDeleted, selectedFile), StatusSuccess)
+					m.loadAvailableFiles()
+					if m.fileListCursor >= len(m.availableFiles) && m.fileListCursor > 0 {
+						m.fileListCursor--
+					}
+				}
+			}
+			m.confirmDelete = false
+			return m, clearStatusAfter(time.Duration(m.config.UI.Timeouts.Status) * time.Second)
+		case "n", "esc":
+			m.confirmDelete = false
+			m.statusMessage = ""
+			return m, nil
+		}
+		return m, nil
+	}
+
 	switch msg.String() {
 	case "enter":
 		if len(m.availableFiles) > 0 && m.fileListCursor < len(m.availableFiles) {
@@ -489,6 +529,19 @@ func (m Model) updateFileList(msg tea.KeyMsg) (Model, tea.Cmd) {
 		m.filePathInput.SetValue("")
 		m.filePathInput.Focus()
 
+	case "d":
+		if len(m.availableFiles) > 0 && m.fileListCursor < len(m.availableFiles) {
+			m.confirmDelete = true
+			m.setStatus(fmt.Sprintf(m.locale.ConfirmDelete, m.availableFiles[m.fileListCursor]), StatusWarn)
+		}
+
+	case "r":
+		if len(m.availableFiles) > 0 && m.fileListCursor < len(m.availableFiles) {
+			m.renaming = true
+			m.renameInput.SetValue(m.availableFiles[m.fileListCursor])
+			m.renameInput.Focus()
+		}
+
 	case "/":
 		m.fileSearchInput.SetValue("")
 		m.fileSearchInput.Focus()
@@ -505,6 +558,50 @@ func (m Model) updateFileList(msg tea.KeyMsg) (Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+func (m Model) updateRenameMode(msg tea.KeyMsg) (Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		newName := m.renameInput.Value()
+		if newName == "" {
+			m.renaming = false
+			m.renameInput.Blur()
+			return m, nil
+		}
+		if filepath.Ext(newName) != ".json" {
+			newName += ".json"
+		}
+		if len(m.availableFiles) > 0 && m.fileListCursor < len(m.availableFiles) {
+			oldPath := filepath.Join(m.workDir, m.availableFiles[m.fileListCursor])
+			newPath := filepath.Join(m.workDir, newName)
+			if err := os.Rename(oldPath, newPath); err != nil {
+				m.setStatus(fmt.Sprintf(m.locale.StatusRenameError, err.Error()), StatusError)
+			} else {
+				m.setStatus(fmt.Sprintf(m.locale.StatusRenamed, m.availableFiles[m.fileListCursor], newName), StatusSuccess)
+				m.loadAvailableFiles()
+				for i, f := range m.availableFiles {
+					if f == newName {
+						m.fileListCursor = i
+						break
+					}
+				}
+			}
+		}
+		m.renaming = false
+		m.renameInput.Blur()
+		return m, clearStatusAfter(time.Duration(m.config.UI.Timeouts.Status) * time.Second)
+
+	case "esc":
+		m.renaming = false
+		m.renameInput.Blur()
+		m.statusMessage = ""
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.renameInput, cmd = m.renameInput.Update(msg)
+	return m, cmd
 }
 
 // saveStateCmd выполняет сохранение и возвращает команду очистки статуса.
@@ -610,6 +707,10 @@ func (m *Model) exitFileMode() {
 	m.filePathInput.SetValue("")
 	m.fileSearchInput.Blur()
 	m.fileSearchInput.SetValue("")
+	m.renameInput.Blur()
+	m.renameInput.SetValue("")
+	m.confirmDelete = false
+	m.renaming = false
 	m.focusCurrent()
 }
 

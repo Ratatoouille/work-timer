@@ -48,6 +48,8 @@ type Locale struct {
 	FileListEmpty   string
 	FileListHintNew string
 	FileListHint    string
+	ConfirmDelete   string
+	RenamePrompt    string
 
 	// --- Статусные сообщения ---
 	StatusCopied        string
@@ -59,6 +61,10 @@ type Locale struct {
 	StatusSaveError     string // "❌ Ошибка сохранения: %s"
 	StatusLoadError     string // "❌ Ошибка загрузки: %s"
 	StatusPathError     string // "❌ Ошибка пути: %s"
+	StatusDeleted       string // "✅ Удалено: %s"
+	StatusDeleteError   string // "❌ Ошибка удаления: %s"
+	StatusRenamed       string // "✅ Переименовано: %s → %s"
+	StatusRenameError   string // "❌ Ошибка переименования: %s"
 
 	// --- Ошибки калькулятора ---
 	ErrInvalidStartTime    string
@@ -122,7 +128,9 @@ var localeRU = Locale{
 	FileListTitle:   "📂 Выберите файл",
 	FileListEmpty:   "Нет сохранённых файлов",
 	FileListHintNew: "[n] создать новый  [Esc] отмена",
-	FileListHint:    "[j/k ↑↓] навигация  [Enter] выбрать  [/] поиск  [n] новый  [Esc] отмена",
+	FileListHint:    "[j/k ↑↓] навигация  [Enter] выбрать  [/] поиск  [d] удалить  [r] переименовать  [n] новый  [Esc] отмена",
+	ConfirmDelete:   "⚠  Удалить %s? [y] да  [n/Esc] отмена",
+	RenamePrompt:    "✏  Новое имя:",
 
 	StatusCopied:        "✅ Скопировано в буфер обмена",
 	StatusUnsaved:       "⚠  Есть несохранённые изменения. Нажмите q ещё раз для выхода",
@@ -133,6 +141,10 @@ var localeRU = Locale{
 	StatusSaveError:     "❌ Ошибка сохранения: %s",
 	StatusLoadError:     "❌ Ошибка загрузки: %s",
 	StatusPathError:     "❌ Ошибка пути: %s",
+	StatusDeleted:       "✅ Удалено: %s",
+	StatusDeleteError:   "❌ Ошибка удаления: %s",
+	StatusRenamed:       "✅ Переименовано: %s → %s",
+	StatusRenameError:   "❌ Ошибка переименования: %s",
 
 	ErrInvalidStartTime:    "неверное время начала",
 	ErrInvalidWorked:       "неверный формат 'отработано'",
@@ -173,6 +185,8 @@ Insert-режим:
   j/k или ↑/↓  — навигация по списку
   /             — поиск файлов
   Enter        — загрузить выбранный файл
+  d            — удалить файл
+  r            — переименовать файл
   n            — создать новый файл
   Esc          — отмена
 
@@ -229,7 +243,9 @@ var localeEN = Locale{
 	FileListTitle:   "📂 Select file",
 	FileListEmpty:   "No saved files",
 	FileListHintNew: "[n] create new  [Esc] cancel",
-	FileListHint:    "[j/k ↑↓] navigate  [Enter] select  [/] search  [n] new  [Esc] cancel",
+	FileListHint:    "[j/k ↑↓] navigate  [Enter] select  [/] search  [d] delete  [r] rename  [n] new  [Esc] cancel",
+	ConfirmDelete:   "⚠  Delete %s? [y] yes  [n/Esc] cancel",
+	RenamePrompt:    "✏  New name:",
 
 	StatusCopied:        "✅ Copied to clipboard",
 	StatusUnsaved:       "⚠  Unsaved changes. Press q again to quit",
@@ -240,6 +256,10 @@ var localeEN = Locale{
 	StatusSaveError:     "❌ Save error: %s",
 	StatusLoadError:     "❌ Load error: %s",
 	StatusPathError:     "❌ Path error: %s",
+	StatusDeleted:       "✅ Deleted: %s",
+	StatusDeleteError:   "❌ Delete error: %s",
+	StatusRenamed:       "✅ Renamed: %s → %s",
+	StatusRenameError:   "❌ Rename error: %s",
 
 	ErrInvalidStartTime:    "invalid start time",
 	ErrInvalidWorked:       "invalid format for 'worked'",
@@ -280,6 +300,8 @@ File selection:
   j/k or ↑/↓   — navigate list
   /             — search files
   Enter         — load selected file
+  d             — delete file
+  r             — rename file
   n             — create new file
   Esc           — cancel
 
