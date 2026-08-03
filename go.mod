@@ -1,4 +1,4 @@
-module github.com/Ratatoouille/work-timer
+module github.com/Ratatoouille/work-timer/v2
 
 go 1.25.6
 
