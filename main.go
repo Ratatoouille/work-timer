@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"os"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
-const version = "1.5.0"
+const version = "2.0.0"
 
 func main() {
 	saveFile := ""
@@ -32,7 +32,7 @@ func main() {
 		}
 	}
 
-	p := tea.NewProgram(NewModel(saveFile), tea.WithAltScreen())
+	p := tea.NewProgram(NewModel(saveFile))
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)

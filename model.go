@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 )
 
 type Mode int
@@ -126,11 +126,11 @@ func NewModel(saveFile string) Model {
 
 	fileInput := textinput.New()
 	fileInput.Placeholder = loc.PlaceholderFile
-	fileInput.Width = 40
+	fileInput.SetWidth(40)
 
 	fileSearchInput := textinput.New()
 	fileSearchInput.Placeholder = "search files"
-	fileSearchInput.Width = 30
+	fileSearchInput.SetWidth(30)
 
 	workDir, _ := toAbsolutePath(cfg.WorkDir)
 
@@ -178,20 +178,20 @@ func NewModel(saveFile string) Model {
 
 func createTimeInput() textinput.Model {
 	ti := textinput.New()
-	ti.Width = 6
+	ti.SetWidth(6)
 	ti.CharLimit = 5 // формат чч:мм
 	return ti
 }
 
 func createDurationInput() textinput.Model {
 	ti := textinput.New()
-	ti.Width = 7
+	ti.SetWidth(7)
 	ti.CharLimit = 6 // формат ЧЧЧ:мм (до 999 часов)
 	return ti
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(textinput.Blink, tick())
+	return tea.Batch(func() tea.Msg { return textinput.Blink() }, tick())
 }
 
 func tick() tea.Cmd {
@@ -316,7 +316,7 @@ func (m Model) updateNormalMode(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "d":
 		m.deleteCurrentBreak()
 
-	case " ":
+	case "space":
 		if m.cursor == FieldAddTZ {
 			m.addTZ = !m.addTZ
 			m.isDirty = true

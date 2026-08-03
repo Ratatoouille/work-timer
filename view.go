@@ -7,19 +7,22 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/lipgloss"
+	"image/color"
+
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // Стили инициализируются из конфига через initStyles().
 var (
-	colorAccent  lipgloss.Color
+	colorAccent  color.Color
 	colorMuted   = lipgloss.Color("8")
 	colorSuccess = lipgloss.Color("10")
 	colorError   = lipgloss.Color("9")
-	colorBreak   lipgloss.Color
-	colorResult  lipgloss.Color
-	colorWarn    lipgloss.Color
+	colorBreak   color.Color
+	colorResult  color.Color
+	colorWarn    color.Color
 
 	fieldBoxStyle      lipgloss.Style
 	fieldActiveStyle   lipgloss.Style
@@ -40,7 +43,6 @@ var (
 
 	labelStyle lipgloss.Style
 
-	resultBoxStyle   lipgloss.Style
 	resultLabelStyle lipgloss.Style
 	resultValueStyle lipgloss.Style
 	errorStyle       lipgloss.Style
@@ -119,12 +121,6 @@ func initStyles(cfg Config) {
 		Italic(true).
 		Foreground(lipgloss.Color("7"))
 
-	resultBoxStyle = lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(colorResult).
-		Padding(0, 2).
-		MarginTop(1)
-
 	resultLabelStyle = lipgloss.NewStyle().Foreground(colorMuted)
 	resultValueStyle = lipgloss.NewStyle().Bold(true).Foreground(colorResult)
 
@@ -187,7 +183,7 @@ func (m Model) dividerWidth() int {
 	return w
 }
 
-func (m Model) View() string {
+func (m Model) View() tea.View {
 	var content string
 	switch {
 	case m.helpState == HelpVisible:
@@ -203,9 +199,13 @@ func (m Model) View() string {
 	}
 
 	if m.width == 0 || m.height == 0 {
-		return content
+		v := tea.NewView(content)
+		v.AltScreen = true
+		return v
 	}
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content)
+	v := tea.NewView(lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content))
+	v.AltScreen = true
+	return v
 }
 
 func (m Model) renderMain() string {
@@ -215,7 +215,6 @@ func (m Model) renderMain() string {
 	b.WriteString(m.renderBreaks())
 	b.WriteString(m.renderStatusMessage())
 	b.WriteString(m.renderResult())
-	b.WriteString(m.renderProgressBar())
 	b.WriteString(m.renderControls())
 	return b.String()
 }
@@ -231,46 +230,63 @@ func (m Model) renderHeader() string {
 	divW := m.dividerWidth()
 	title := headerStyle.Render("Work Timer")
 	badge := modeStyle.Render(" " + modeStr + " ")
-	topLine := "🕒  " + title + headerDividerStyle.Render("  │  ") + badge
 
-	var fileLine string
+	var filePart string
 	if m.saveFile != "" {
 		dot := statusSuccessStyle.Render("◆")
 		if m.isDirty {
 			dot = dirtyDotStyle.Render("◆")
 		}
-		fileLine = dot + "  " + fileNameStyle.Render(filepath.Base(m.saveFile))
+		filePart = headerDividerStyle.Render("  │  ") + dot + "  " + fileNameStyle.Render(filepath.Base(m.saveFile))
 	} else {
-		fileLine = statusBarStyle.Render(m.locale.NoFileSelected)
+		filePart = headerDividerStyle.Render("  │  ") + statusBarStyle.Render(m.locale.NoFileSelected)
 	}
 
-	hintsLine := statusBarStyle.Render(m.locale.HeaderHints)
+	topLine := "🕒  " + title + headerDividerStyle.Render("  │  ") + badge + filePart
+
 	divider := headerDividerStyle.Render(strings.Repeat("─", divW))
-	return topLine + "\n" + fileLine + "\n" + hintsLine + "\n" + divider + "\n"
+	return topLine + "\n" + divider + "\n"
 }
 
 func (m Model) renderSectionHeader(icon, title string, style lipgloss.Style) string {
-	text := style.Render(icon + " " + title)
-	lineLen := m.dividerWidth() - lipgloss.Width(text) - 1
+	text := style.Render(icon + " " + title + " ")
+	lineLen := m.dividerWidth() - lipgloss.Width(text)
 	if lineLen < 2 {
 		lineLen = 2
 	}
-	line := sectionDividerStyle.Render(" " + strings.Repeat("─", lineLen))
+	line := sectionDividerStyle.Render(strings.Repeat("─", lineLen))
 	return "\n" + lipgloss.JoinHorizontal(lipgloss.Left, text, line) + "\n"
+}
+
+func (m Model) renderSubsectionHeader(title string, style lipgloss.Style) string {
+	text := style.Render(title + " ")
+	lineLen := m.dividerWidth() - lipgloss.Width(text) - 2
+	if lineLen < 2 {
+		lineLen = 2
+	}
+	line := sectionDividerStyle.Render(strings.Repeat("─", lineLen))
+	return lipgloss.JoinHorizontal(lipgloss.Left, "  ", text, line)
 }
 
 func (m Model) renderMainFields() string {
 	var b strings.Builder
 	b.WriteString(m.renderSectionHeader("▸", m.locale.SectionMain, sectionHeaderStyle))
-	b.WriteString("\n")
 	b.WriteString(m.renderField(FieldStartTime, m.locale.FieldStart, m.startTime) + "\n")
 
 	// Режим 1: оставшееся время
-	b.WriteString("\n" + sectionDividerStyle.Render(m.locale.FieldMode1Label) + "\n")
+	mode1Style := sectionDividerStyle
+	if m.workTime.Value() != "" {
+		mode1Style = lipgloss.NewStyle().Foreground(colorAccent).Bold(true)
+	}
+	b.WriteString("\n" + m.renderSubsectionHeader(m.locale.FieldMode1Label, mode1Style) + "\n")
 	b.WriteString(m.renderField(FieldWorkTime, m.locale.FieldRemainingTime, m.workTime) + "\n")
 
 	// Режим 2: отработано / план
-	b.WriteString("\n" + sectionDividerStyle.Render(m.locale.FieldMode2Label) + "\n")
+	mode2Style := sectionDividerStyle
+	if m.workTime.Value() == "" && m.worked.Value() != "" && m.plan.Value() != "" {
+		mode2Style = lipgloss.NewStyle().Foreground(colorAccent).Bold(true)
+	}
+	b.WriteString("\n" + m.renderSubsectionHeader(m.locale.FieldMode2Label, mode2Style) + "\n")
 	b.WriteString(m.renderFieldDuration(FieldWorked, m.locale.FieldWorked, m.worked) + "\n")
 	b.WriteString(m.renderFieldDuration(FieldPlan, m.locale.FieldPlan, m.plan) + "\n")
 
@@ -294,12 +310,15 @@ func (m Model) renderBreaks() string {
 
 	var b strings.Builder
 	b.WriteString(m.renderSectionHeader("▸", m.locale.SectionBreaks, sectionBreakHeaderStyle))
-	b.WriteString("\n")
 
 	for i, br := range m.breaks {
 		baseIndex := FieldBreaksStart + i*2
 		if i > 0 {
-			b.WriteString(sectionDividerStyle.Render("  "+strings.Repeat("·", 30)) + "\n")
+			dotLen := m.dividerWidth() - 4
+			if dotLen < 4 {
+				dotLen = 4
+			}
+			b.WriteString(sectionDividerStyle.Render("  "+strings.Repeat("·", dotLen)) + "\n")
 		}
 		b.WriteString(m.renderField(baseIndex, fmt.Sprintf(m.locale.BreakLeft, i+1), br.from) + "\n")
 		b.WriteString(m.renderField(baseIndex+1, fmt.Sprintf(m.locale.BreakRight, i+1), br.to) + "\n")
@@ -334,165 +353,167 @@ func (m Model) renderResult() string {
 	}
 
 	var b strings.Builder
-	divider := sectionDividerStyle.Render(strings.Repeat("─", m.dividerWidth()))
-	b.WriteString("\n" + divider + "\n")
+	b.WriteString(m.renderSectionHeader("▸", m.locale.SectionResult, resultValueStyle))
 
 	if m.err != "" {
 		b.WriteString(errorStyle.Render("✗  "+m.err) + "\n")
 	}
 	if m.result != "" {
-		label := resultLabelStyle.Render(m.locale.ResultLabel)
+		label := resultLabelStyle.Render(m.locale.ResultLabel + "  ")
 		value := resultValueStyle.Render("⏰  " + m.result)
-		b.WriteString(resultBoxStyle.Render(label+value) + "\n")
+
+		_, elapsed, remaining, ok := m.progressInfo()
+		if ok {
+			elapsedStr := formatDuration(elapsed)
+			remainingStr := formatDuration(remaining)
+			info := statusBarStyle.Render(fmt.Sprintf("  [%s / %s %s]", elapsedStr, m.locale.Remaining, remainingStr))
+			b.WriteString(lipgloss.JoinHorizontal(lipgloss.Left, label, value, info) + "\n")
+		} else {
+			b.WriteString(lipgloss.JoinHorizontal(lipgloss.Left, label, value) + "\n")
+		}
 	}
 
 	return b.String()
 }
 
-func (m Model) renderProgressBar() string {
+func (m Model) progressInfo() (percent float64, elapsed, remaining time.Duration, ok bool) {
 	if m.err != "" || m.result == "" {
-		return ""
+		return 0, 0, 0, false
 	}
 
-	// Получаем текущее время
 	now := m.currentTime
 	if now.IsZero() {
 		now = time.Now()
 	}
 
-	// Парсим время окончания из result
 	endTimeStr := strings.TrimSpace(strings.TrimPrefix(m.result, "⏰ "))
 	endTimeStr = strings.TrimSpace(endTimeStr)
-	
-	// Парсим время окончания (формат HH:MM)
+
 	parts := strings.Split(endTimeStr, " ")
 	if len(parts) == 0 {
-		return ""
+		return 0, 0, 0, false
 	}
-	
+
 	timePart := parts[0]
 	timeParts := strings.Split(timePart, ":")
 	if len(timeParts) != 2 {
-		return ""
+		return 0, 0, 0, false
 	}
 
 	endHour, err := strconv.Atoi(timeParts[0])
 	if err != nil {
-		return ""
+		return 0, 0, 0, false
 	}
 	endMin, err := strconv.Atoi(timeParts[1])
 	if err != nil {
-		return ""
+		return 0, 0, 0, false
 	}
 
-	// Определяем локаль для endTime
 	var endLoc *time.Location
 	if m.addTZ && m.config.Timezone != "" {
-		// Если флаг addTZ=true, используем целевую timezone
 		endLoc = TimezoneLocation(m.config.Timezone)
 		if endLoc == nil {
 			endLoc = time.Local
 		}
 	} else {
-		// Иначе используем input timezone
 		endLoc = TimezoneLocation(m.config.InputTimezone)
 		if endLoc == nil {
 			endLoc = time.Local
 		}
 	}
 
-	// Создаём время окончания
 	endTime := time.Date(now.Year(), now.Month(), now.Day(), endHour, endMin, 0, 0, endLoc)
-	
-	// Если endTime раньше чем now (в той же зоне), значит это завтра
-	if endTime.Before(now) {
-		endTime = endTime.AddDate(0, 0, 1)
-	}
 
-	// Начало работы (из start_time)
 	startTimeStr := m.startTime.Value()
 	if startTimeStr == "" {
-		return ""
+		return 0, 0, 0, false
 	}
-	
+
 	startParts := strings.Split(startTimeStr, ":")
 	if len(startParts) != 2 {
-		return ""
+		return 0, 0, 0, false
 	}
-	
+
 	startHour, err := strconv.Atoi(startParts[0])
 	if err != nil {
-		return ""
+		return 0, 0, 0, false
 	}
 	startMin, err := strconv.Atoi(startParts[1])
 	if err != nil {
-		return ""
+		return 0, 0, 0, false
 	}
 
-	// Используем input timezone для start
 	startLoc := TimezoneLocation(m.config.InputTimezone)
 	if startLoc == nil {
 		startLoc = time.Local
 	}
 
-	// Создаём время начала
-	startTime := time.Date(now.Year(), now.Month(), now.Day(), startHour, startMin, 0, 0, startLoc)
-	
-	// Если startTime позже endTime, значит начало было вчера
-	if startTime.After(endTime) {
-		startTime = startTime.AddDate(0, 0, -1)
+	// Строим кандидатов: start и end могут быть на разных днях.
+	// Перебираем смещения дней для start относительно end и выбираем окно,
+	// в которое попадает now. Если now после всех вариантов — работа окончена.
+	endCandidates := []time.Time{endTime, endTime.AddDate(0, 0, 1)}
+	nowIn := now.In(endLoc)
+
+	var bestStart, bestEnd time.Time
+	var found bool
+
+	for _, ec := range endCandidates {
+		for _, dayOffset := range []int{0, -1, -2} {
+			sc := time.Date(ec.Year(), ec.Month(), ec.Day(), startHour, startMin, 0, 0, startLoc).In(endLoc)
+			sc = sc.AddDate(0, 0, dayOffset)
+			if !sc.Before(ec) {
+				continue
+			}
+			if !nowIn.Before(sc) && !nowIn.After(ec) {
+				bestStart = sc
+				bestEnd = ec
+				found = true
+				break
+			}
+		}
+		if found {
+			break
+		}
 	}
 
-	// Конвертируем в одну зону для расчёта
-	now = now.In(endLoc)
-	startTime = startTime.In(endLoc)
-	
-	// Считаем длительности
-	totalDuration := endTime.Sub(startTime)
-	elapsedDuration := now.Sub(startTime)
-	
-	// Вычитаем перерывы из elapsed
+	if !found {
+		// now после всех окон — рабочий день окончен, 100%
+		// Берём последнее окно (конец сегодня) для расчёта elapsed.
+		bestEnd = endTime
+		bestStart = time.Date(endTime.Year(), endTime.Month(), endTime.Day(), startHour, startMin, 0, 0, startLoc).In(endLoc)
+		if !bestStart.Before(bestEnd) {
+			bestStart = bestStart.AddDate(0, 0, -1)
+		}
+	}
+
+	totalDuration := bestEnd.Sub(bestStart)
+	elapsedDuration := nowIn.Sub(bestStart)
+
 	breaksDur := m.getBreaksDuration()
 	elapsedDuration = elapsedDuration - breaksDur
-	
+
 	if elapsedDuration < 0 {
 		elapsedDuration = 0
 	}
-	
+
 	if totalDuration <= 0 {
-		return ""
+		return 0, 0, 0, false
 	}
 
-	// Вычисляем прогресс
-	progress := float64(elapsedDuration) / float64(totalDuration)
-	if progress > 1.0 {
-		progress = 1.0
+	p := float64(elapsedDuration) / float64(totalDuration)
+	if p > 1.0 {
+		p = 1.0
 	}
-	if progress < 0 {
-		progress = 0
-	}
-
-	// Рисуем прогресс-бар
-	barWidth := m.dividerWidth() - 10
-	if barWidth < 20 {
-		barWidth = 20
+	if p < 0 {
+		p = 0
 	}
 
-	filled := int(progress * float64(barWidth))
-	if filled > barWidth {
-		filled = barWidth
-	}
-	if filled < 0 {
-		filled = 0
+	remainingDuration := totalDuration - elapsedDuration
+	if remainingDuration < 0 {
+		remainingDuration = 0
 	}
 
-	bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
-	percent := int(progress * 100)
-
-	// Прошедшее время (с учётом перерывов)
-	elapsedStr := formatDuration(elapsedDuration)
-	
-	return "\n" + sectionDividerStyle.Render(fmt.Sprintf(" %s  [%s] %d%%", bar, elapsedStr, percent)) + "\n"
+	return p, elapsedDuration, remainingDuration, true
 }
 
 func (m Model) getBreaksDuration() time.Duration {
@@ -530,29 +551,19 @@ func (m Model) renderControls() string {
 	divW := m.dividerWidth()
 
 	if m.mode == ModeInsert {
-		return controlsBarStyle.Width(divW).Render(k("esc") + "  " + d(m.locale.CtrlNormal))
+		return controlsBarStyle.Width(divW).Render(k("esc") + "  " + d(m.locale.CtrlEdit))
 	}
 
-	line1 := strings.Join([]string{
+	line := strings.Join([]string{
 		k("j/k") + "  " + d(m.locale.CtrlNav),
 		k("i") + "  " + d(m.locale.CtrlEdit),
-		k("esc") + "  " + d(m.locale.CtrlNormal),
-		k("space") + "  " + d(m.locale.CtrlToggle),
-		k("t") + "  " + d(m.locale.CtrlNow),
-		k("x") + "  " + d(m.locale.CtrlClear),
-	}, dot)
-
-	row2 := []string{
-		k("a") + " / " + k("d") + "  " + d(m.locale.CtrlAdd+"/"+m.locale.CtrlDel),
 		k("s") + "  " + d(m.locale.CtrlSave),
 		k("o") + "  " + d(m.locale.CtrlOpen),
-	}
-	if m.result != "" {
-		row2 = append(row2, k("y")+"  "+d(m.locale.CtrlCopy))
-	}
-	line2 := strings.Join(row2, dot)
+		k("?") + "  " + d(m.locale.CtrlHelp),
+		k("q") + "  " + d(m.locale.CtrlQuit),
+	}, dot)
 
-	return controlsBarStyle.Width(divW).Render(line1 + "\n" + line2)
+	return controlsBarStyle.Width(divW).Render(line)
 }
 
 func (m Model) renderSavePrompt() string {
@@ -625,7 +636,7 @@ func (m Model) renderField(index int, label string, input textinput.Model) strin
 		style = fieldInactiveStyle
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Left,
-		labelStyle.Render(label),
+		labelStyle.Render(label+"  "),
 		style.Render(input.View()),
 	)
 }
@@ -641,7 +652,7 @@ func (m Model) renderFieldDuration(index int, label string, input textinput.Mode
 		style = fieldInactiveStyle
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Left,
-		labelStyle.Render(label),
+		labelStyle.Render(label+"  "),
 		style.Render(input.View()),
 	)
 }
@@ -656,7 +667,7 @@ func (m Model) renderCheckbox(index int, label string) string {
 		style = fieldActiveStyle
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Left,
-		labelStyle.Render(label),
+		labelStyle.Render(label+"  "),
 		style.Render(checkbox),
 	)
 }

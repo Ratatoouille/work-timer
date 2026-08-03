@@ -5,12 +5,12 @@ type Locale struct {
 	// --- Заголовок ---
 	ModeNormal     string
 	ModeInsert     string
-	HeaderHints    string
 	NoFileSelected string
 
 	// --- Секции ---
 	SectionMain   string
 	SectionBreaks string
+	SectionResult string
 
 	// --- Поля ввода ---
 	FieldStart         string
@@ -28,19 +28,15 @@ type Locale struct {
 
 	// --- Результат ---
 	ResultLabel string
+	Remaining   string
 
 	// --- Панель управления ---
 	CtrlNav    string
 	CtrlEdit   string
-	CtrlAdd    string
-	CtrlDel    string
-	CtrlToggle string
-	CtrlNormal string
-	CtrlCopy   string
-	CtrlNow    string
-	CtrlClear  string
 	CtrlSave   string
 	CtrlOpen   string
+	CtrlHelp   string
+	CtrlQuit   string
 
 	// --- Промпты ---
 	SaveTitle       string
@@ -90,37 +86,33 @@ type Locale struct {
 var localeRU = Locale{
 	ModeNormal:     "NORMAL",
 	ModeInsert:     "INSERT",
-	HeaderHints:    "? help │ q quit │ s save │ o open",
 	NoFileSelected: "○ файл не выбран",
 
 	SectionMain:   "Основные параметры",
 	SectionBreaks: "Перерывы",
+	SectionResult: "Результат",
 
-	FieldStart:         "Начало:",
-	FieldMode1Label:    "· · режим 1: оставшееся время · ·",
-	FieldRemainingTime: "Оставшееся время:",
-	FieldMode2Label:    "· · режим 2: отработано / план · ·",
-	FieldWorked:        "Отработано:",
-	FieldPlan:          "План:",
-	CheckboxAddTZ:      "Добавить +N часов",
+	FieldStart:         "Начало",
+	FieldMode1Label:    "режим 1: оставшееся время",
+	FieldRemainingTime: "Оставшееся время",
+	FieldMode2Label:    "режим 2: отработано / план",
+	FieldWorked:        "Отработано",
+	FieldPlan:          "План",
+	CheckboxAddTZ:      "Конвертировать timezone",
 	CheckboxShowIn:     "Показать в %s",
 
-	BreakLeft:  "Перерыв %d — ушёл:",
-	BreakRight: "Перерыв %d — вернулся:",
+	BreakLeft:  "Перерыв %d — ушел",
+	BreakRight: "Перерыв %d — вернулся",
 
-	ResultLabel: "Время окончания  ",
+	ResultLabel: "Время окончания",
+	Remaining:   "ост.",
 
-	CtrlNav:    "nav",
-	CtrlEdit:   "edit",
-	CtrlAdd:    "add",
-	CtrlDel:    "del",
-	CtrlToggle: "toggle",
-	CtrlNormal: "normal",
-	CtrlCopy:   "copy",
-	CtrlNow:    "сейчас",
-	CtrlClear:  "очистить",
+	CtrlNav:    "навиг.",
+	CtrlEdit:   "редакт.",
 	CtrlSave:   "сохранить",
 	CtrlOpen:   "открыть",
+	CtrlHelp:   "справка",
+	CtrlQuit:   "выход",
 
 	SaveTitle:       "💾 Сохранить как",
 	SaveFolder:      "Папка: %s",
@@ -168,7 +160,7 @@ Normal-режим:
   i            — Insert режим
   a            — добавить перерыв
   d            — удалить перерыв
-  space        — toggle чекбокс
+  space        — переключить чекбокс
   y            — скопировать результат
   s            — сохранить
   o            — открыть список файлов
@@ -185,8 +177,8 @@ Insert-режим:
   Esc          — отмена
 
 Общие:
-  ?            — показать/скрыть help
-  q            — закрыть help / выход
+  ?            — показать/скрыть справку
+  q            — закрыть справку / выход
   Ctrl+S       — быстрое сохранение
   Ctrl+O       — открыть список файлов
 
@@ -201,37 +193,33 @@ Insert-режим:
 var localeEN = Locale{
 	ModeNormal:     "NORMAL",
 	ModeInsert:     "INSERT",
-	HeaderHints:    "? help │ q quit │ s save │ o open",
 	NoFileSelected: "○ no file selected",
 
 	SectionMain:   "Main parameters",
 	SectionBreaks: "Breaks",
+	SectionResult: "Result",
 
-	FieldStart:         "Start:",
-	FieldMode1Label:    "· · mode 1: remaining time · ·",
-	FieldRemainingTime: "Remaining time:",
-	FieldMode2Label:    "· · mode 2: worked / plan · ·",
-	FieldWorked:        "Worked:",
-	FieldPlan:          "Plan:",
-	CheckboxAddTZ:      "Add +N hours",
+	FieldStart:         "Start",
+	FieldMode1Label:    "mode 1: remaining time",
+	FieldRemainingTime: "Remaining time",
+	FieldMode2Label:    "mode 2: worked / plan",
+	FieldWorked:        "Worked",
+	FieldPlan:          "Plan",
+	CheckboxAddTZ:      "Convert timezone",
 	CheckboxShowIn:     "Show in %s",
 
-	BreakLeft:  "Break %d — left:",
-	BreakRight: "Break %d — returned:",
+	BreakLeft:  "Break %d — left",
+	BreakRight: "Break %d — returned",
 
-	ResultLabel: "End time  ",
+	ResultLabel: "End time",
+	Remaining:   "left",
 
 	CtrlNav:    "nav",
 	CtrlEdit:   "edit",
-	CtrlAdd:    "add",
-	CtrlDel:    "del",
-	CtrlToggle: "toggle",
-	CtrlNormal: "normal",
-	CtrlCopy:   "copy",
-	CtrlNow:    "now",
-	CtrlClear:  "clear",
 	CtrlSave:   "save",
 	CtrlOpen:   "open",
+	CtrlHelp:   "help",
+	CtrlQuit:   "quit",
 
 	SaveTitle:       "💾 Save as",
 	SaveFolder:      "Folder: %s",
