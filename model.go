@@ -382,6 +382,12 @@ func (m Model) updateNormalMode(msg tea.KeyMsg) (Model, tea.Cmd) {
 		if m.result != "" {
 			return m, copyToClipboard(m.result)
 		}
+
+	default:
+		// Быстрый ввод из конфига
+		if value, ok := m.config.QuickInputs[msg.String()]; ok {
+			m.fillCurrentWithValue(value)
+		}
 	}
 
 	return m, nil
@@ -915,6 +921,19 @@ func (m *Model) fillCurrentWithNow() {
 	}
 	now := CurrentTimeInZone(m.config.InputTimezone)
 	field.SetValue(now)
+	m.isDirty = true
+}
+
+// fillCurrentWithValue вставляет заданное значение в поле под курсором.
+func (m *Model) fillCurrentWithValue(value string) {
+	if m.cursor == FieldAddTZ {
+		return
+	}
+	field := m.getCurrentField()
+	if field == nil {
+		return
+	}
+	field.SetValue(value)
 	m.isDirty = true
 }
 
