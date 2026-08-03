@@ -198,6 +198,8 @@ func (m Model) View() tea.View {
 		content = m.renderLoadPrompt()
 	case m.mode == ModeFileList:
 		content = m.renderFileList()
+	case m.mode == ModePresetList:
+		content = m.renderPresetList()
 	default:
 		content = containerStyle.Width(m.containerWidth()).Render(m.renderMain())
 	}
@@ -624,6 +626,30 @@ func (m Model) renderFileList() string {
 			b.WriteString(statusBarStyle.Render(m.locale.FileListHint))
 		}
 	}
+	return promptStyle.Render(b.String())
+}
+
+func (m Model) renderPresetList() string {
+	var b strings.Builder
+	b.WriteString(headerStyle.Render(m.locale.PresetTitle) + "\n\n")
+
+	if len(m.config.Breaks) == 0 {
+		b.WriteString("\n  " + statusBarStyle.Render(m.locale.PresetEmpty) + "\n\n")
+	} else {
+		for i, preset := range m.config.Breaks {
+			label := fmt.Sprintf("%s  (%s – %s)", preset.Name, preset.From, preset.To)
+			if i == m.presetCursor {
+				b.WriteString(fileListItemActiveStyle.Render("▶ "+label) + "\n")
+			} else {
+				b.WriteString(fileListItemStyle.Render("  "+label) + "\n")
+			}
+		}
+		b.WriteString("\n")
+	}
+
+	divider := sectionDividerStyle.Render(strings.Repeat("─", 40))
+	b.WriteString(divider + "\n\n")
+	b.WriteString(statusBarStyle.Render(m.locale.PresetHint))
 	return promptStyle.Render(b.String())
 }
 
