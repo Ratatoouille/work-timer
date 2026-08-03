@@ -43,6 +43,8 @@ var (
 
 	labelStyle lipgloss.Style
 
+	dimStyle lipgloss.Style
+
 	resultLabelStyle lipgloss.Style
 	resultValueStyle lipgloss.Style
 	errorStyle       lipgloss.Style
@@ -120,6 +122,8 @@ func initStyles(cfg Config) {
 		Width(cfg.UI.LabelWidth).
 		Italic(true).
 		Foreground(lipgloss.Color("7"))
+
+	dimStyle = lipgloss.NewStyle().Foreground(colorMuted)
 
 	resultLabelStyle = lipgloss.NewStyle().Foreground(colorMuted)
 	resultValueStyle = lipgloss.NewStyle().Bold(true).Foreground(colorResult)
@@ -268,21 +272,33 @@ func (m Model) renderMainFields() string {
 	b.WriteString(m.renderField(FieldStartTime, m.locale.FieldStart, m.startTime) + "\n")
 
 	// Режим 1: оставшееся время
+	mode1Active := m.workTime.Value() != ""
 	mode1Style := sectionDividerStyle
-	if m.workTime.Value() != "" {
+	if mode1Active {
 		mode1Style = lipgloss.NewStyle().Foreground(colorAccent).Bold(true)
 	}
 	b.WriteString("\n" + m.renderSubsectionHeader(m.locale.FieldMode1Label, mode1Style) + "\n")
-	b.WriteString(m.renderField(FieldWorkTime, m.locale.FieldRemainingTime, m.workTime) + "\n")
+	workTimeField := m.renderField(FieldWorkTime, m.locale.FieldRemainingTime, m.workTime)
+	if !mode1Active && m.worked.Value() != "" {
+		workTimeField = dimStyle.Render(workTimeField)
+	}
+	b.WriteString(workTimeField + "\n")
 
 	// Режим 2: отработано / план
+	mode2Active := m.workTime.Value() == "" && m.worked.Value() != "" && m.plan.Value() != ""
 	mode2Style := sectionDividerStyle
-	if m.workTime.Value() == "" && m.worked.Value() != "" && m.plan.Value() != "" {
+	if mode2Active {
 		mode2Style = lipgloss.NewStyle().Foreground(colorAccent).Bold(true)
 	}
 	b.WriteString("\n" + m.renderSubsectionHeader(m.locale.FieldMode2Label, mode2Style) + "\n")
-	b.WriteString(m.renderFieldDuration(FieldWorked, m.locale.FieldWorked, m.worked) + "\n")
-	b.WriteString(m.renderFieldDuration(FieldPlan, m.locale.FieldPlan, m.plan) + "\n")
+	workedField := m.renderFieldDuration(FieldWorked, m.locale.FieldWorked, m.worked)
+	planField := m.renderFieldDuration(FieldPlan, m.locale.FieldPlan, m.plan)
+	if !mode2Active && m.workTime.Value() != "" {
+		workedField = dimStyle.Render(workedField)
+		planField = dimStyle.Render(planField)
+	}
+	b.WriteString(workedField + "\n")
+	b.WriteString(planField + "\n")
 
 	b.WriteString("\n")
 
@@ -353,18 +369,30 @@ func (m Model) renderResult() string {
 		label := resultLabelStyle.Render(m.locale.ResultLabel + "  ")
 		value := resultValueStyle.Render("⏰  " + m.result)
 
-		_, elapsed, remaining, ok := m.progressInfo()
+		percent, elapsed, remaining, ok := m.progressInfo()
 		if ok {
 			elapsedStr := formatDuration(elapsed)
 			remainingStr := formatDuration(remaining)
 			info := statusBarStyle.Render(fmt.Sprintf("  [%s / %s %s]", elapsedStr, m.locale.Remaining, remainingStr))
 			b.WriteString(lipgloss.JoinHorizontal(lipgloss.Left, label, value, info) + "\n")
+			b.WriteString(m.renderProgressBar(percent) + "\n")
 		} else {
 			b.WriteString(lipgloss.JoinHorizontal(lipgloss.Left, label, value) + "\n")
 		}
 	}
 
 	return b.String()
+}
+
+// renderProgressBar рисует текстовый прогресс-бар шириной divW.
+func (m Model) renderProgressBar(percent float64) string {
+	barWidth := max(m.dividerWidth()-12, 10)
+	filled := int(percent * float64(barWidth))
+	filled = min(filled, barWidth)
+	filled = max(filled, 0)
+	bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
+	pct := fmt.Sprintf("%3.0f%%", percent*100)
+	return statusBarStyle.Render("  ") + lipgloss.NewStyle().Foreground(colorAccent).Render(bar) + statusBarStyle.Render(" "+pct)
 }
 
 func (m Model) progressInfo() (percent float64, elapsed, remaining time.Duration, ok bool) {
