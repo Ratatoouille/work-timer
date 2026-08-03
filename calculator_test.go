@@ -222,6 +222,29 @@ func TestCalculatorCalculate(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "night shift crossing midnight",
+			input: CalculationInput{
+				StartTime: "22:00",
+				WorkTime:  "08:00",
+				AddTZ:     false,
+			},
+			want:    "06:00",
+			wantErr: false,
+		},
+		{
+			name: "night shift with midnight break",
+			input: CalculationInput{
+				StartTime: "22:00",
+				WorkTime:  "08:00",
+				Breaks: []BreakTime{
+					{From: "23:00", To: "23:30"},
+				},
+				AddTZ: false,
+			},
+			want:    "06:30",
+			wantErr: false,
+		},
+		{
 			name: "calculation with worked/plan",
 			input: CalculationInput{
 				StartTime: "09:00",
@@ -328,18 +351,19 @@ func TestCalculateBreaksDuration(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "invalid break end before start",
-			breaks: []BreakTime{
-				{From: "13:00", To: "12:00"},
-			},
-			wantErr: true,
-		},
-		{
 			name: "break equal start and end",
 			breaks: []BreakTime{
 				{From: "12:00", To: "12:00"},
 			},
 			wantErr: true,
+		},
+		{
+			name: "break crossing midnight",
+			breaks: []BreakTime{
+				{From: "23:00", To: "01:00"},
+			},
+			want:    2 * time.Hour,
+			wantErr: false,
 		},
 	}
 
@@ -458,11 +482,11 @@ func TestBreaksDuration(t *testing.T) {
 			want: 0,
 		},
 		{
-			name: "end before start skipped",
+			name: "end before start treated as midnight crossover",
 			breaks: []BreakTime{
-				{From: "13:00", To: "12:00"},
+				{From: "23:00", To: "01:00"},
 			},
-			want: 0,
+			want: 2 * time.Hour,
 		},
 		{
 			name: "equal start and end skipped",
