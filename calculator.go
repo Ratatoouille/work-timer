@@ -101,7 +101,12 @@ func (c *Calculator) calculateBreaksDuration(breaks []BreakTime, workStart, _ ti
 			return 0, fmt.Errorf(c.locale.ErrBreakInvalidTo, i+1)
 		}
 
-		if to.Before(from) || to.Equal(from) {
+		// Переход через полночь: если конец раньше начала — это следующий день
+		if to.Before(from) {
+			to = to.AddDate(0, 0, 1)
+		}
+
+		if to.Equal(from) {
 			return 0, fmt.Errorf(c.locale.ErrBreakEndBeforeStart, i+1)
 		}
 
@@ -116,7 +121,8 @@ func (c *Calculator) calculateBreaksDuration(breaks []BreakTime, workStart, _ ti
 }
 
 // BreaksDuration вычисляет суммарную длительность перерывов.
-// СInvalid перерывы (пустые или неверный формат) пропускаются.
+// Невалидные перерывы (пустые или неверный формат) пропускаются.
+// Перерывы, заканчивающиеся раньше начала, трактуются как переход через полночь.
 func (c *Calculator) BreaksDuration(breaks []BreakTime) time.Duration {
 	total := time.Duration(0)
 	for _, br := range breaks {
@@ -131,7 +137,10 @@ func (c *Calculator) BreaksDuration(breaks []BreakTime) time.Duration {
 		if err != nil {
 			continue
 		}
-		if to.Before(from) || to.Equal(from) {
+		if to.Before(from) {
+			to = to.AddDate(0, 0, 1)
+		}
+		if to.Equal(from) {
 			continue
 		}
 		total += to.Sub(from)
