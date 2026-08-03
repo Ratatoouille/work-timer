@@ -55,7 +55,6 @@ const DefaultWorkDir = "~/work_timer"
 type clearStatusMsg struct{}
 type clipboardCopiedMsg struct{}
 type tickMsg struct{}
-type autoSaveMsg struct{}
 
 // ----------------------------------------------------------------------------
 
@@ -167,7 +166,9 @@ func NewModel(saveFile string) Model {
 
 	m.startTime.Focus()
 
-	os.MkdirAll(workDir, 0o755)
+	if err := os.MkdirAll(workDir, 0o755); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not create work directory %s: %v\n", workDir, err)
+	}
 
 	if saveFile != "" {
 		m.loadState()
@@ -759,7 +760,7 @@ func (m *Model) loadState() {
 	m.workTime.SetValue(data.WorkTime)
 	m.worked.SetValue(data.Worked)
 	m.plan.SetValue(data.Plan)
-	m.addTZ = data.AddTZ || data.LegacyAddFour
+	m.addTZ = data.AddTZ
 
 	m.breaks = make([]Break, 0, len(data.Breaks))
 	for _, bd := range data.Breaks {

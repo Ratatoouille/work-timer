@@ -406,3 +406,88 @@ func TestCalculateWorkedExceedsPlan(t *testing.T) {
 		t.Error("Calculate() should return error when worked > plan")
 	}
 }
+
+func TestBreaksDuration(t *testing.T) {
+	calc := NewCalculator(localeEN)
+
+	tests := []struct {
+		name   string
+		breaks []BreakTime
+		want   time.Duration
+	}{
+		{
+			name:   "no breaks",
+			breaks: []BreakTime{},
+			want:   0,
+		},
+		{
+			name: "single break one hour",
+			breaks: []BreakTime{
+				{From: "12:00", To: "13:00"},
+			},
+			want: time.Hour,
+		},
+		{
+			name: "multiple breaks summed",
+			breaks: []BreakTime{
+				{From: "12:00", To: "12:30"},
+				{From: "15:00", To: "15:45"},
+			},
+			want: 75 * time.Minute,
+		},
+		{
+			name: "empty break fields skipped",
+			breaks: []BreakTime{
+				{From: "", To: ""},
+				{From: "12:00", To: "13:00"},
+			},
+			want: time.Hour,
+		},
+		{
+			name: "invalid from time skipped",
+			breaks: []BreakTime{
+				{From: "99:99", To: "13:00"},
+			},
+			want: 0,
+		},
+		{
+			name: "invalid to time skipped",
+			breaks: []BreakTime{
+				{From: "12:00", To: "abc"},
+			},
+			want: 0,
+		},
+		{
+			name: "end before start skipped",
+			breaks: []BreakTime{
+				{From: "13:00", To: "12:00"},
+			},
+			want: 0,
+		},
+		{
+			name: "equal start and end skipped",
+			breaks: []BreakTime{
+				{From: "12:00", To: "12:00"},
+			},
+			want: 0,
+		},
+		{
+			name: "mixed valid and invalid",
+			breaks: []BreakTime{
+				{From: "12:00", To: "13:00"},
+				{From: "bad", To: "14:00"},
+				{From: "15:00", To: "15:15"},
+			},
+			want: time.Hour + 15*time.Minute,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := calc.BreaksDuration(tt.breaks)
+			if got != tt.want {
+				t.Errorf("BreaksDuration() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

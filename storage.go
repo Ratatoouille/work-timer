@@ -17,7 +17,6 @@ type SaveData struct {
 	Worked        string      `json:"worked"`
 	Plan          string      `json:"plan"`
 	AddTZ         bool        `json:"add_tz"`
-	LegacyAddFour bool        `json:"add_four,omitempty"`
 	Breaks        []BreakData `json:"breaks"`
 }
 

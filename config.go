@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -72,7 +73,9 @@ func LoadConfig() Config {
 
 	data, err := os.ReadFile(absPath)
 	if err != nil {
-		_ = writeDefaultConfig(absPath)
+		if werr := writeDefaultConfig(absPath); werr != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not write default config to %s: %v\n", absPath, werr)
+		}
 		return cfg
 	}
 
@@ -116,7 +119,20 @@ func LoadConfig() Config {
 		cfg.InputTimezone = def.InputTimezone
 	}
 
+	validateTimezone("input_timezone", cfg.InputTimezone)
+	validateTimezone("timezone", cfg.Timezone)
+
 	return cfg
+}
+
+// validateTimezone печатает предупреждение в stderr если зона невалидна.
+func validateTimezone(field, tz string) {
+	if tz == "" {
+		return
+	}
+	if _, err := time.LoadLocation(tz); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: invalid %s %q in config: %v\n", field, tz, err)
+	}
 }
 
 func writeDefaultConfig(absPath string) error {

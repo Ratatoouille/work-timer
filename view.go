@@ -250,20 +250,14 @@ func (m Model) renderHeader() string {
 
 func (m Model) renderSectionHeader(icon, title string, style lipgloss.Style) string {
 	text := style.Render(icon + " " + title + " ")
-	lineLen := m.dividerWidth() - lipgloss.Width(text)
-	if lineLen < 2 {
-		lineLen = 2
-	}
+	lineLen := max(m.dividerWidth()-lipgloss.Width(text), 2)
 	line := sectionDividerStyle.Render(strings.Repeat("─", lineLen))
 	return "\n" + lipgloss.JoinHorizontal(lipgloss.Left, text, line) + "\n"
 }
 
 func (m Model) renderSubsectionHeader(title string, style lipgloss.Style) string {
 	text := style.Render(title + " ")
-	lineLen := m.dividerWidth() - lipgloss.Width(text) - 2
-	if lineLen < 2 {
-		lineLen = 2
-	}
+	lineLen := max(m.dividerWidth()-lipgloss.Width(text)-2, 2)
 	line := sectionDividerStyle.Render(strings.Repeat("─", lineLen))
 	return lipgloss.JoinHorizontal(lipgloss.Left, "  ", text, line)
 }
@@ -314,10 +308,7 @@ func (m Model) renderBreaks() string {
 	for i, br := range m.breaks {
 		baseIndex := FieldBreaksStart + i*2
 		if i > 0 {
-			dotLen := m.dividerWidth() - 4
-			if dotLen < 4 {
-				dotLen = 4
-			}
+			dotLen := max(m.dividerWidth()-4, 4)
 			b.WriteString(sectionDividerStyle.Render("  "+strings.Repeat("·", dotLen)) + "\n")
 		}
 		b.WriteString(m.renderField(baseIndex, fmt.Sprintf(m.locale.BreakLeft, i+1), br.from) + "\n")
@@ -490,11 +481,7 @@ func (m Model) progressInfo() (percent float64, elapsed, remaining time.Duration
 	elapsedDuration := nowIn.Sub(bestStart)
 
 	breaksDur := m.getBreaksDuration()
-	elapsedDuration = elapsedDuration - breaksDur
-
-	if elapsedDuration < 0 {
-		elapsedDuration = 0
-	}
+	elapsedDuration = max(elapsedDuration-breaksDur, 0)
 
 	if totalDuration <= 0 {
 		return 0, 0, 0, false
@@ -508,34 +495,13 @@ func (m Model) progressInfo() (percent float64, elapsed, remaining time.Duration
 		p = 0
 	}
 
-	remainingDuration := totalDuration - elapsedDuration
-	if remainingDuration < 0 {
-		remainingDuration = 0
-	}
+	remainingDuration := max(totalDuration-elapsedDuration, 0)
 
 	return p, elapsedDuration, remainingDuration, true
 }
 
 func (m Model) getBreaksDuration() time.Duration {
-	total := time.Duration(0)
-	for _, br := range m.breaks {
-		fromStr := br.from.Value()
-		toStr := br.to.Value()
-		if fromStr == "" || toStr == "" {
-			continue
-		}
-		// Парим время начала и конца перерыва как HH:MM
-		from, err := time.Parse("15:04", fromStr)
-		if err != nil {
-			continue
-		}
-		to, err := time.Parse("15:04", toStr)
-		if err != nil {
-			continue
-		}
-		total += to.Sub(from)
-	}
-	return total
+	return m.calculator.BreaksDuration(m.getBreaksData())
 }
 
 func formatDuration(d time.Duration) string {
