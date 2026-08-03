@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -118,6 +119,11 @@ func (m *Model) setStatus(msg string, t StatusType) {
 	m.statusType = t
 }
 
+// todayFileName возвращает имя файла сохранения для текущей даты в формате DD_MM.json.
+func todayFileName() string {
+	return time.Now().Format("02_01") + ".json"
+}
+
 func NewModel(saveFile string) Model {
 	cfg := LoadConfig()
 	initStyles(cfg)
@@ -137,6 +143,12 @@ func NewModel(saveFile string) Model {
 		if absPath, err := toAbsolutePath(saveFile); err == nil {
 			saveFile = absPath
 		}
+	} else if cfg.DefaultFile != "" {
+		if absPath, err := toAbsolutePath(cfg.DefaultFile); err == nil {
+			saveFile = absPath
+		}
+	} else {
+		saveFile = filepath.Join(workDir, todayFileName())
 	}
 
 	m := Model{
@@ -171,7 +183,9 @@ func NewModel(saveFile string) Model {
 	}
 
 	if saveFile != "" {
-		m.loadState()
+		if _, err := os.Stat(saveFile); err == nil {
+			m.loadState()
+		}
 	}
 
 	return m
@@ -524,7 +538,7 @@ func (m *Model) enterSaveMode() {
 	if m.saveFile != "" {
 		m.filePathInput.SetValue(filepath.Base(m.saveFile))
 	} else {
-		m.filePathInput.SetValue("")
+		m.filePathInput.SetValue(todayFileName())
 	}
 	m.filePathInput.Focus()
 	m.statusMessage = ""
@@ -545,15 +559,33 @@ func (m *Model) loadAvailableFiles() {
 		return
 	}
 
-	files := []string{}
+	type fileInfo struct {
+		name    string
+		modTime time.Time
+	}
+	files := make([]fileInfo, 0, len(entries))
 	for _, entry := range entries {
-		if !entry.IsDir() && filepath.Ext(entry.Name()) == ".json" {
-			files = append(files, entry.Name())
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
 		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		files = append(files, fileInfo{name: entry.Name(), modTime: info.ModTime()})
 	}
 
-	m.allFiles = files
-	m.availableFiles = files
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].modTime.After(files[j].modTime)
+	})
+
+	names := make([]string, len(files))
+	for i, f := range files {
+		names[i] = f.name
+	}
+
+	m.allFiles = names
+	m.availableFiles = names
 }
 
 func (m *Model) filterFiles() {
