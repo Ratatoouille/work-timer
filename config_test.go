@@ -46,7 +46,7 @@ func TestLoadConfigCreatesDefault(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	t.Setenv("HOME", tmpDir)
 
@@ -70,12 +70,12 @@ func TestLoadConfigParsesValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	t.Setenv("HOME", tmpDir)
 
 	configDir := filepath.Join(tmpDir, ".config", "work_timer")
-	os.MkdirAll(configDir, 0o755)
+	_ = os.MkdirAll(configDir, 0o755)
 
 	content := `
 work_dir        = "~/my_timers"
@@ -98,7 +98,7 @@ clipboard = 5
 status    = 6
 warning   = 7
 `
-	os.WriteFile(filepath.Join(configDir, "config.toml"), []byte(content), 0o644)
+	_ = os.WriteFile(filepath.Join(configDir, "config.toml"), []byte(content), 0o644)
 
 	cfg := LoadConfig()
 
@@ -133,15 +133,15 @@ func TestLoadConfigFillsZeroValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	t.Setenv("HOME", tmpDir)
 
 	configDir := filepath.Join(tmpDir, ".config", "work_timer")
-	os.MkdirAll(configDir, 0o755)
+	_ = os.MkdirAll(configDir, 0o755)
 
 	content := `timezone = "Asia/Krasnoyarsk"`
-	os.WriteFile(filepath.Join(configDir, "config.toml"), []byte(content), 0o644)
+	_ = os.WriteFile(filepath.Join(configDir, "config.toml"), []byte(content), 0o644)
 
 	cfg := LoadConfig()
 

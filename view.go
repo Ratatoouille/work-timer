@@ -359,7 +359,7 @@ func (m Model) renderStatusMessage() string {
 }
 
 func (m Model) renderResult() string {
-	if m.err == "" && m.result == "" {
+	if m.err == "" && m.result == "" && m.endTimeRaw == "" {
 		return ""
 	}
 
@@ -369,11 +369,12 @@ func (m Model) renderResult() string {
 	if m.err != "" {
 		b.WriteString(errorStyle.Render("✗  "+m.err) + "\n")
 	}
+
+	percent, elapsed, remaining, ok := m.progressInfo()
+
 	if m.result != "" {
 		label := resultLabelStyle.Render(m.locale.ResultLabel + "  ")
 		value := resultValueStyle.Render("⏰  " + m.result)
-
-		percent, elapsed, remaining, ok := m.progressInfo()
 		if ok {
 			elapsedStr := formatDuration(elapsed)
 			remainingStr := formatDuration(remaining)
@@ -383,6 +384,13 @@ func (m Model) renderResult() string {
 		} else {
 			b.WriteString(lipgloss.JoinHorizontal(lipgloss.Left, label, value) + "\n")
 		}
+	} else if ok {
+		// Результат скрыт (ошибка конвертации TZ), но прогресс виден
+		elapsedStr := formatDuration(elapsed)
+		remainingStr := formatDuration(remaining)
+		info := fmt.Sprintf("  [%s / %s %s]", elapsedStr, m.locale.Remaining, remainingStr)
+		b.WriteString(statusBarStyle.Render(info) + "\n")
+		b.WriteString(m.renderProgressBar(percent) + "\n")
 	}
 
 	return b.String()
@@ -390,7 +398,7 @@ func (m Model) renderResult() string {
 
 // renderProgressBar рисует текстовый прогресс-бар шириной divW.
 func (m Model) renderProgressBar(percent float64) string {
-	barWidth := max(m.dividerWidth()-12, 10)
+	barWidth := min(max(m.dividerWidth()/3, 10), 30)
 	filled := int(percent * float64(barWidth))
 	filled = min(filled, barWidth)
 	filled = max(filled, 0)
@@ -400,7 +408,7 @@ func (m Model) renderProgressBar(percent float64) string {
 }
 
 func (m Model) progressInfo() (percent float64, elapsed, remaining time.Duration, ok bool) {
-	if m.err != "" || m.result == "" {
+	if m.endTimeRaw == "" {
 		return 0, 0, 0, false
 	}
 
@@ -409,8 +417,7 @@ func (m Model) progressInfo() (percent float64, elapsed, remaining time.Duration
 		now = time.Now()
 	}
 
-	endTimeStr := strings.TrimSpace(strings.TrimPrefix(m.result, "⏰ "))
-	endTimeStr = strings.TrimSpace(endTimeStr)
+	endTimeStr := strings.TrimSpace(m.endTimeRaw)
 
 	parts := strings.Split(endTimeStr, " ")
 	if len(parts) == 0 {
@@ -432,17 +439,11 @@ func (m Model) progressInfo() (percent float64, elapsed, remaining time.Duration
 		return 0, 0, 0, false
 	}
 
-	var endLoc *time.Location
-	if m.addTZ && m.config.Timezone != "" {
-		endLoc = TimezoneLocation(m.config.Timezone)
-		if endLoc == nil {
-			endLoc = time.Local
-		}
-	} else {
-		endLoc = TimezoneLocation(m.config.InputTimezone)
-		if endLoc == nil {
-			endLoc = time.Local
-		}
+	// endTimeRaw задаётся в input timezone (без конвертации TZ),
+	// поэтому окно прогресса считаем в той же зоне.
+	endLoc := TimezoneLocation(m.config.InputTimezone)
+	if endLoc == nil {
+		endLoc = time.Local
 	}
 
 	startTimeStr := m.startTime.Value()
@@ -747,8 +748,8 @@ func isInvalidTimeValue(s string) bool {
 		return false
 	}
 	colonIdx := strings.Index(s, ":")
-	switch {
-	case colonIdx == -1:
+	switch colonIdx {
+	case -1:
 		if len(s) > 2 {
 			return true
 		}
@@ -762,12 +763,12 @@ func isInvalidTimeValue(s string) bool {
 			h = h*10 + int(ch-'0')
 		}
 		return h > 23
-	case colonIdx == 1:
+	case 1:
 		if s[0] < '0' || s[0] > '9' {
 			return true
 		}
 		return invalidMinutesSuffix(s[2:])
-	case colonIdx == 2:
+	case 2:
 		if s[0] < '0' || s[0] > '9' || s[1] < '0' || s[1] > '9' {
 			return true
 		}

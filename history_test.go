@@ -11,7 +11,7 @@ func TestHistoryAppendAndLoad(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	hs := NewHistoryStorage(tmpDir)
 
@@ -45,15 +45,19 @@ func TestHistoryAppendUpdatesExistingDate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	hs := NewHistoryStorage(tmpDir)
 
 	e1 := HistoryEntry{Date: "2025-01-15", StartTime: "09:00", EndTime: "18:00", SavedAt: "18:01"}
 	e2 := HistoryEntry{Date: "2025-01-15", StartTime: "08:00", EndTime: "17:00", SavedAt: "17:01"}
 
-	hs.Append(e1)
-	hs.Append(e2)
+	if err := hs.Append(e1); err != nil {
+		t.Fatalf("Append(e1) error = %v", err)
+	}
+	if err := hs.Append(e2); err != nil {
+		t.Fatalf("Append(e2) error = %v", err)
+	}
 
 	entries, _ := hs.Load()
 	if len(entries) != 1 {
@@ -69,13 +73,19 @@ func TestHistorySortedNewestFirst(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	hs := NewHistoryStorage(tmpDir)
 
-	hs.Append(HistoryEntry{Date: "2025-01-10"})
-	hs.Append(HistoryEntry{Date: "2025-01-15"})
-	hs.Append(HistoryEntry{Date: "2025-01-12"})
+	if err := hs.Append(HistoryEntry{Date: "2025-01-10"}); err != nil {
+		t.Fatalf("Append error = %v", err)
+	}
+	if err := hs.Append(HistoryEntry{Date: "2025-01-15"}); err != nil {
+		t.Fatalf("Append error = %v", err)
+	}
+	if err := hs.Append(HistoryEntry{Date: "2025-01-12"}); err != nil {
+		t.Fatalf("Append error = %v", err)
+	}
 
 	entries, _ := hs.Load()
 	if len(entries) != 3 {

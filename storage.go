@@ -12,12 +12,12 @@ type Storage struct {
 }
 
 type SaveData struct {
-	StartTime     string      `json:"start_time"`
-	WorkTime      string      `json:"work_time"`
-	Worked        string      `json:"worked"`
-	Plan          string      `json:"plan"`
-	AddTZ         bool        `json:"add_tz"`
-	Breaks        []BreakData `json:"breaks"`
+	StartTime string      `json:"start_time"`
+	WorkTime  string      `json:"work_time"`
+	Worked    string      `json:"worked"`
+	Plan      string      `json:"plan"`
+	AddTZ     bool        `json:"add_tz"`
+	Breaks    []BreakData `json:"breaks"`
 }
 
 type BreakData struct {

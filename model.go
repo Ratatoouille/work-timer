@@ -89,30 +89,30 @@ type Model struct {
 	breaks    []Break
 
 	// File operation fields
-	filePathInput    textinput.Model
-	statusMessage    string
-	statusType       StatusType
-	availableFiles   []string
-	allFiles         []string // все файлы для поиска
-	fileListCursor   int
-	fileSearchInput  textinput.Model
-	confirmDelete    bool
-	renameInput      textinput.Model
-	renaming         bool
-	presetCursor     int
-	historyEntries   []HistoryEntry
-	historyCursor    int
+	filePathInput   textinput.Model
+	statusMessage   string
+	statusType      StatusType
+	availableFiles  []string
+	allFiles        []string // все файлы для поиска
+	fileListCursor  int
+	fileSearchInput textinput.Model
+	confirmDelete   bool
+	renameInput     textinput.Model
+	renaming        bool
+	presetCursor    int
+	historyEntries  []HistoryEntry
+	historyCursor   int
 
 	// Calculation results
 	result       string
+	endTimeRaw   string // время окончания без конвертации TZ (для progressInfo)
 	err          string
 	lastSnapshot string
 
 	// Timer
-	timerRunning bool
-	currentTime  time.Time
-	dayEnded     bool
-	notified     bool
+	currentTime time.Time
+	dayEnded    bool
+	notified    bool
 
 	// Services
 	storage    *Storage
@@ -877,7 +877,7 @@ func (m *Model) jumpToNextBreak() {
 	// Если уже на последнем поле, переходим к первому перерыву
 	if m.cursor >= FieldBreaksStart {
 		// Если это последнее поле перерыва, переходим к началу
-		if m.cursor >= FieldBreaksStart + len(m.breaks)*2 - 1 {
+		if m.cursor >= FieldBreaksStart+len(m.breaks)*2-1 {
 			m.cursor = FieldBreaksStart
 		} else {
 			// Иначе переходим к следующему полю
@@ -957,7 +957,7 @@ func (m *Model) clearCurrentField() {
 // checkDayEnd проверяет, перешло ли текущее время через расчётное время окончания.
 // Если день окончен — ставит флаг dayEnded и (однократно) уведомляет.
 func (m *Model) checkDayEnd() {
-	if m.err != "" || m.result == "" {
+	if m.endTimeRaw == "" {
 		return
 	}
 
@@ -1019,6 +1019,18 @@ func (m *Model) recalculate() {
 	}
 
 	result, err := m.calculator.Calculate(input)
+
+	// endTimeRaw — время окончания без конвертации TZ, для progressInfo/checkDayEnd.
+	// Считаем даже если конвертация TZ дала ошибку.
+	rawInput := input
+	rawInput.AddTZ = false
+	rawResult, rawErr := m.calculator.Calculate(rawInput)
+	if rawErr == nil {
+		m.endTimeRaw = rawResult
+	} else {
+		m.endTimeRaw = ""
+	}
+
 	if err != nil {
 		m.err = err.Error()
 		m.result = ""
@@ -1186,8 +1198,8 @@ func copyToClipboard(text string) tea.Cmd {
 		encoded := base64.StdEncoding.EncodeToString([]byte(text))
 		f, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
 		if err == nil {
-			fmt.Fprintf(f, "\033]52;c;%s\007", encoded)
-			f.Close()
+			_, _ = fmt.Fprintf(f, "\033]52;c;%s\007", encoded)
+			_ = f.Close()
 		}
 		return clipboardCopiedMsg{}
 	}

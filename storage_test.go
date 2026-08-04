@@ -12,7 +12,7 @@ func TestStorageSaveAndLoad(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	testFile := filepath.Join(tmpDir, "test.json")
 	storage := NewStorage(testFile)
@@ -74,12 +74,14 @@ func TestStorageNewFileUsesAddTZ(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	testFile := filepath.Join(tmpDir, "new.json")
 	storage := NewStorage(testFile)
 
-	storage.Save(SaveData{StartTime: "09:00", AddTZ: true})
+	if err := storage.Save(SaveData{StartTime: "09:00", AddTZ: true}); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
 
 	content, _ := os.ReadFile(testFile)
 	if !contains(string(content), `"add_tz": true`) {
@@ -92,7 +94,7 @@ func TestStorageSaveCreatesDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	testFile := filepath.Join(tmpDir, "subdir", "test.json")
 	storage := NewStorage(testFile)
@@ -129,10 +131,10 @@ func TestStorageLoadInvalidJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	testFile := filepath.Join(tmpDir, "invalid.json")
-	os.WriteFile(testFile, []byte("not valid json"), 0o644)
+	_ = os.WriteFile(testFile, []byte("not valid json"), 0o644)
 
 	storage := NewStorage(testFile)
 	_, err = storage.Load()

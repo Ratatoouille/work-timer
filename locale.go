@@ -31,12 +31,12 @@ type Locale struct {
 	Remaining   string
 
 	// --- Панель управления ---
-	CtrlNav    string
-	CtrlEdit   string
-	CtrlSave   string
-	CtrlOpen   string
-	CtrlHelp   string
-	CtrlQuit   string
+	CtrlNav  string
+	CtrlEdit string
+	CtrlSave string
+	CtrlOpen string
+	CtrlHelp string
+	CtrlQuit string
 
 	// --- Промпты ---
 	SaveTitle       string
@@ -125,12 +125,12 @@ var localeRU = Locale{
 	ResultLabel: "Время окончания",
 	Remaining:   "ост.",
 
-	CtrlNav:    "навиг.",
-	CtrlEdit:   "редакт.",
-	CtrlSave:   "сохранить",
-	CtrlOpen:   "открыть",
-	CtrlHelp:   "справка",
-	CtrlQuit:   "выход",
+	CtrlNav:  "навиг.",
+	CtrlEdit: "редакт.",
+	CtrlSave: "сохранить",
+	CtrlOpen: "открыть",
+	CtrlHelp: "справка",
+	CtrlQuit: "выход",
 
 	SaveTitle:       "💾 Сохранить как",
 	SaveFolder:      "Папка: %s",
@@ -254,12 +254,12 @@ var localeEN = Locale{
 	ResultLabel: "End time",
 	Remaining:   "left",
 
-	CtrlNav:    "nav",
-	CtrlEdit:   "edit",
-	CtrlSave:   "save",
-	CtrlOpen:   "open",
-	CtrlHelp:   "help",
-	CtrlQuit:   "quit",
+	CtrlNav:  "nav",
+	CtrlEdit: "edit",
+	CtrlSave: "save",
+	CtrlOpen: "open",
+	CtrlHelp: "help",
+	CtrlQuit: "quit",
 
 	SaveTitle:       "💾 Save as",
 	SaveFolder:      "Folder: %s",
