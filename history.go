@@ -11,8 +11,8 @@ import (
 
 // HistoryEntry — одна запись в журнале рабочих дней.
 type HistoryEntry struct {
-	Date     string `json:"date"`      // YYYY-MM-DD
-	FileName string `json:"file"`      // имя файла сохранения
+	Date      string `json:"date"` // YYYY-MM-DD
+	FileName  string `json:"file"` // имя файла сохранения
 	StartTime string `json:"start"`
 	EndTime   string `json:"end"`
 	Breaks    int    `json:"breaks"`

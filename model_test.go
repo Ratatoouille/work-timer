@@ -210,11 +210,11 @@ func TestModelLoadAvailableFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
-	os.WriteFile(filepath.Join(tmpDir, "test1.json"), []byte("{}"), 0o644)
-	os.WriteFile(filepath.Join(tmpDir, "test2.json"), []byte("{}"), 0o644)
-	os.WriteFile(filepath.Join(tmpDir, "readme.txt"), []byte(""), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "test1.json"), []byte("{}"), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "test2.json"), []byte("{}"), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "readme.txt"), []byte(""), 0o644)
 
 	m := NewModel("")
 	m.workDir = tmpDir
@@ -482,11 +482,11 @@ func TestUpdateFileListWithSearch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
-	os.WriteFile(filepath.Join(tmpDir, "project1.json"), []byte("{}"), 0o644)
-	os.WriteFile(filepath.Join(tmpDir, "project2.json"), []byte("{}"), 0o644)
-	os.WriteFile(filepath.Join(tmpDir, "backup.json"), []byte("{}"), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "project1.json"), []byte("{}"), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "project2.json"), []byte("{}"), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "backup.json"), []byte("{}"), 0o644)
 
 	m := NewModel("")
 	m.workDir = tmpDir
@@ -526,10 +526,10 @@ func TestLoadAvailableFilesInitializesAllFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
-	os.WriteFile(filepath.Join(tmpDir, "file1.json"), []byte("{}"), 0o644)
-	os.WriteFile(filepath.Join(tmpDir, "file2.json"), []byte("{}"), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "file1.json"), []byte("{}"), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "file2.json"), []byte("{}"), 0o644)
 
 	m := NewModel("")
 	m.workDir = tmpDir
@@ -559,6 +559,7 @@ func newProgressTestModel(start, result string, now time.Time) Model {
 	m.calculator = NewCalculator(localeEN)
 	m.startTime.SetValue(start)
 	m.result = result
+	m.endTimeRaw = result
 	m.err = ""
 	m.currentTime = now
 	return m
@@ -647,10 +648,10 @@ func TestProgressInfoNoResult(t *testing.T) {
 
 func TestProgressInfoWithError(t *testing.T) {
 	m := newProgressTestModel("09:00", "17:00", time.Now())
-	m.err = "some error"
+	m.endTimeRaw = ""
 	_, _, _, ok := m.progressInfo()
 	if ok {
-		t.Error("progressInfo() with error should return ok=false")
+		t.Error("progressInfo() with empty endTimeRaw should return ok=false")
 	}
 }
 
