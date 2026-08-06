@@ -99,7 +99,7 @@ func (m *Model) recordHistory() {
 	breaksDur := m.calculator.BreaksDuration(m.getBreaksData())
 
 	entry := HistoryEntry{
-		Date:      time.Now().Format("2006-01-02"),
+		Date:      time.Now().Format("02-01-2006"),
 		FileName:  filepath.Base(m.saveFile),
 		StartTime: m.startTime.Value(),
 		EndTime:   m.result,

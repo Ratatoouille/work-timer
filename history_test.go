@@ -16,7 +16,7 @@ func TestHistoryAppendAndLoad(t *testing.T) {
 	hs := NewHistoryStorage(tmpDir)
 
 	e1 := HistoryEntry{
-		Date:      "2025-01-15",
+		Date:      "15-01-2025",
 		StartTime: "09:00",
 		EndTime:   "18:00",
 		Breaks:    1,
@@ -49,8 +49,8 @@ func TestHistoryAppendUpdatesExistingDate(t *testing.T) {
 
 	hs := NewHistoryStorage(tmpDir)
 
-	e1 := HistoryEntry{Date: "2025-01-15", StartTime: "09:00", EndTime: "18:00", SavedAt: "18:01"}
-	e2 := HistoryEntry{Date: "2025-01-15", StartTime: "08:00", EndTime: "17:00", SavedAt: "17:01"}
+	e1 := HistoryEntry{Date: "15-01-2025", StartTime: "09:00", EndTime: "18:00", SavedAt: "18:01"}
+	e2 := HistoryEntry{Date: "15-01-2025", StartTime: "08:00", EndTime: "17:00", SavedAt: "17:01"}
 
 	if err := hs.Append(e1); err != nil {
 		t.Fatalf("Append(e1) error = %v", err)
@@ -77,13 +77,13 @@ func TestHistorySortedNewestFirst(t *testing.T) {
 
 	hs := NewHistoryStorage(tmpDir)
 
-	if err := hs.Append(HistoryEntry{Date: "2025-01-10"}); err != nil {
+	if err := hs.Append(HistoryEntry{Date: "10-01-2025"}); err != nil {
 		t.Fatalf("Append error = %v", err)
 	}
-	if err := hs.Append(HistoryEntry{Date: "2025-01-15"}); err != nil {
+	if err := hs.Append(HistoryEntry{Date: "15-01-2025"}); err != nil {
 		t.Fatalf("Append error = %v", err)
 	}
-	if err := hs.Append(HistoryEntry{Date: "2025-01-12"}); err != nil {
+	if err := hs.Append(HistoryEntry{Date: "12-01-2025"}); err != nil {
 		t.Fatalf("Append error = %v", err)
 	}
 
@@ -91,11 +91,11 @@ func TestHistorySortedNewestFirst(t *testing.T) {
 	if len(entries) != 3 {
 		t.Fatalf("expected 3 entries, got %d", len(entries))
 	}
-	if entries[0].Date != "2025-01-15" {
-		t.Errorf("first entry Date = %v, want 2025-01-15", entries[0].Date)
+	if entries[0].Date != "15-01-2025" {
+		t.Errorf("first entry Date = %v, want 15-01-2025", entries[0].Date)
 	}
-	if entries[2].Date != "2025-01-10" {
-		t.Errorf("last entry Date = %v, want 2025-01-10", entries[2].Date)
+	if entries[2].Date != "10-01-2025" {
+		t.Errorf("last entry Date = %v, want 10-01-2025", entries[2].Date)
 	}
 }
 
