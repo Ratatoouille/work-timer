@@ -787,6 +787,9 @@ func (m *Model) loadAvailableFiles() {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
 			continue
 		}
+		if entry.Name() == HistoryFileName {
+			continue
+		}
 		info, err := entry.Info()
 		if err != nil {
 			continue

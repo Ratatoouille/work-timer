@@ -21,13 +21,16 @@ type HistoryEntry struct {
 	SavedAt   string `json:"saved_at"`
 }
 
+// HistoryFileName — имя файла журнала рабочих дней.
+const HistoryFileName = "history.json"
+
 // HistoryStorage хранит массив записей в history.json.
 type HistoryStorage struct {
 	filePath string
 }
 
 func NewHistoryStorage(workDir string) *HistoryStorage {
-	return &HistoryStorage{filePath: filepath.Join(workDir, "history.json")}
+	return &HistoryStorage{filePath: filepath.Join(workDir, HistoryFileName)}
 }
 
 // Append добавляет или обновляет запись за текущую дату.

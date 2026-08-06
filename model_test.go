@@ -8,6 +8,18 @@ import (
 	"time"
 )
 
+// TestMain изолирует тесты от реального конфига и рабочей папки,
+// чтобы NewModel("") не подхватывал существующие save-файлы или timezone.
+func TestMain(m *testing.M) {
+	tmpHome, err := os.MkdirTemp("", "work-timer-home-*")
+	if err != nil {
+		panic(err)
+	}
+	_ = os.Setenv("HOME", tmpHome)
+	defer func() { _ = os.RemoveAll(tmpHome) }()
+	os.Exit(m.Run())
+}
+
 func TestToAbsolutePath(t *testing.T) {
 	tests := []struct {
 		name    string
