@@ -1158,7 +1158,59 @@ func (m Model) historyFooter() string {
 }
 
 func (m Model) renderHelp() string {
-	return helpBoxStyle.Render(fmt.Sprintf(m.locale.HelpText, ConfigPath, DefaultWorkDir))
+	// Справка в той же визуальной системе, что и остальные экраны:
+	// заголовок + сгруппированные строки «клавиша — описание».
+	fk := func(s string) string { return controlKeyStyle.Render(s) }
+	fd := func(s string) string { return statusBarStyle.Render(s) }
+	row := func(key, desc string) string {
+		return "  " + fk(key) + "  " + fd(desc)
+	}
+
+	var b strings.Builder
+	b.WriteString(headerStyle.Render(m.locale.HelpTitle) + "\n\n")
+
+	writeSection := func(title string, rows string) {
+		b.WriteString(sectionBreakHeaderStyle.Render("▾ "+title) + "\n")
+		b.WriteString(rows + "\n")
+	}
+
+	writeSection(m.locale.HelpNormal,
+		row("j/k ↑/↓ ←/→", m.locale.CtrlNav)+"\n"+
+			row("i", m.locale.CtrlEdit)+"\n"+
+			row("a", m.locale.CtrlAddBreak)+"\n"+
+			row("p", m.locale.CtrlPreset)+"\n"+
+			row("d", m.locale.CtrlDelBreak)+"\n"+
+			row("H", m.locale.CtrlHistory)+"\n"+
+			row("space", m.locale.CtrlCheckbox)+"\n"+
+			row("y", m.locale.CtrlCopy)+"\n"+
+			row("s", m.locale.CtrlSave)+"\n"+
+			row("o", m.locale.CtrlOpen)+"\n")
+
+	writeSection(m.locale.HelpModes,
+		statusBarStyle.Render("  "+m.locale.HelpMode1Desc)+"\n"+
+			statusBarStyle.Render("  "+m.locale.HelpMode2Desc)+"\n"+
+			row("x", m.locale.CtrlClear)+"\n")
+
+	writeSection(m.locale.HelpFileList,
+		row("j/k ↑/↓", m.locale.CtrlNav)+"\n"+
+			row("/", m.locale.CtrlSearch)+"\n"+
+			row("Enter", m.locale.CtrlSelect)+"\n"+
+			row("d", m.locale.CtrlDelete)+"\n"+
+			row("r", m.locale.CtrlRename)+"\n"+
+			row("n", m.locale.CtrlNew)+"\n"+
+			row("Esc", m.locale.CtrlCancel)+"\n")
+
+	writeSection(m.locale.HelpGeneral,
+		row("?", m.locale.CtrlHelp)+"\n"+
+			row("q", m.locale.CtrlQuit)+"\n"+
+			row("Ctrl+S", m.locale.CtrlSave)+"\n"+
+			row("Ctrl+O", m.locale.CtrlOpen)+"\n")
+
+	b.WriteString(statusBarStyle.Render(m.locale.HowModes) + "\n\n")
+	b.WriteString(fd(m.locale.HelpConfig+": ") + fk(ConfigPath) + "\n")
+	b.WriteString(fd(m.locale.HelpFolder+": ") + fk(DefaultWorkDir) + "\n")
+
+	return helpBoxStyle.Render(b.String())
 }
 
 // isInvalidTimeValue возвращает true если строка непустая и не является
