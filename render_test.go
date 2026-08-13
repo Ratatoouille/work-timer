@@ -41,10 +41,10 @@ func TestRenderDoneNoStaleRemaining(t *testing.T) {
 	}
 
 	params := m.renderParams()
-	// Параметры — только конфигурация: строка режима и строка TZ. Без полей
-	// значений (которые дублировали бы runtime state) и без runtime значений.
-	if strings.Contains(params, "Отработано") || strings.Contains(params, "План") {
-		t.Errorf("params must not contain runtime field rows, got:\n%s", params)
+	// Параметры — конфигурация и поля ввода. Никакого runtime-значения
+	// "осталось" быть не должно (оно живёт только в hero).
+	if strings.Contains(params, "Осталось") {
+		t.Errorf("params must not show runtime remaining, got:\n%s", params)
 	}
 	tzLine := params[strings.Index(params, "\n")+1:]
 	if strings.Contains(tzLine, "Нет") == false {
