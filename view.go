@@ -443,19 +443,31 @@ func (m Model) resultSeconds() float64 {
 
 // renderTimerRow — время начала и окончания рабочего дня.
 func (m Model) renderTimerRow() string {
-	var start string
-	if m.startTime.Value() != "" {
-		start = paramValueStyle.Render(m.startTime.Value())
-	} else {
-		start = statusBarStyle.Render("—:—")
-	}
-
 	end := m.formatResultEnd()
-
 	col := m.labelCol(m.locale.FieldStart, m.locale.FieldEnd)
 	sep := "   "
+	startLabel := m.valueLabelStyle(m.cursor == FieldStartTime)
+
+	// В Insert-режиме на активном поле показываем настоящий textinput,
+	// иначе — значение с индикацией фокуса (подчёркивание/placeholder).
+	var start string
+	if m.mode == ModeInsert && m.cursor == FieldStartTime {
+		start = fieldActiveStyle.Render(m.startTime.View())
+	} else if m.startTime.Value() != "" {
+		start = paramValueStyle.Render(m.startTime.Value())
+		if m.cursor == FieldStartTime {
+			start = paramValueStyle.Underline(true).Foreground(colorAccent).Render(m.startTime.Value())
+		}
+	} else {
+		start = statusBarStyle.Render("—:—")
+		if m.cursor == FieldStartTime {
+			start = offStyle.Render("▍" + m.locale.PlaceholderTime)
+		}
+	}
+
 	row := lipgloss.JoinHorizontal(lipgloss.Left,
-		paramLabelStyle.Width(col).Render(m.locale.FieldStart+"  "),
+		startLabel.Width(col).Render(m.locale.FieldStart),
+		"  ",
 		start,
 		sep,
 		paramLabelStyle.Width(col).Render(m.locale.FieldEnd),
