@@ -104,6 +104,24 @@ func TestModelAddAndDeleteBreak(t *testing.T) {
 	}
 }
 
+func TestDeleteBreakKeepsCursorValid(t *testing.T) {
+	m := NewModel("")
+	m.startTime.SetValue("09:00")
+	m.workTime.SetValue("08:00")
+
+	m.addBreak()
+	m.addBreak()
+	// Переходим на "to" первой пары полей перерыва (cursor=6).
+	m.cursor = FieldBreaksStart + 1
+	m.deleteCurrentBreak()
+	// После удаления (breaks=1) валидны поля 5,6. Курсор не должен выходить
+	// за пределы диапазона видимых полей.
+	got := m.cursor
+	if got < 0 || got > FieldAddTZ && got >= FieldBreaksStart+len(m.breaks)*2 {
+		t.Errorf("cursor out of valid range after delete: %d (breaks=%d)", got, len(m.breaks))
+	}
+}
+
 func TestModelMoveCursor(t *testing.T) {
 	m := NewModel("")
 
