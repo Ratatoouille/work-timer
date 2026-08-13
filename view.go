@@ -1119,12 +1119,14 @@ func (m Model) renderHelp() string {
 	writeSection(m.locale.HelpNormal,
 		row("j/k ↑/↓ ←/→", m.locale.CtrlNav)+"\n"+
 			row("i", m.locale.CtrlEdit)+"\n"+
+			row("t", m.locale.CtrlCurrentTime)+"\n"+
 			row("a", m.locale.CtrlAddBreak)+"\n"+
 			row("p", m.locale.CtrlPreset)+"\n"+
 			row("d", m.locale.CtrlDelBreak)+"\n"+
 			row("H", m.locale.CtrlHistory)+"\n"+
 			row("space", m.locale.CtrlCheckbox)+"\n"+
 			row("y", m.locale.CtrlCopy)+"\n"+
+			row("1-9", m.locale.CtrlQuickInput)+"\n"+
 			row("s", m.locale.CtrlSave)+"\n"+
 			row("o", m.locale.CtrlOpen)+"\n")
 

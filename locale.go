@@ -144,16 +144,18 @@ type Locale struct {
 	HelpFolder   string // "Рабочая папка"
 
 	// Описания действий для справки
-	CtrlAddBreak  string
-	CtrlPreset    string
-	CtrlDelBreak  string
-	CtrlHistory   string
-	CtrlCheckbox  string
-	CtrlCopy      string
-	CtrlClear     string
-	CtrlSelect    string
-	HelpMode1Desc string
-	HelpMode2Desc string
+	CtrlAddBreak    string
+	CtrlPreset      string
+	CtrlDelBreak    string
+	CtrlHistory     string
+	CtrlCheckbox    string
+	CtrlCopy        string
+	CtrlClear       string
+	CtrlSelect      string
+	CtrlCurrentTime string // "t" — вставить текущее время
+	CtrlQuickInput  string // клавиши 1-9 — быстрый ввод
+	HelpMode1Desc   string
+	HelpMode2Desc   string
 }
 
 var localeRU = Locale{
@@ -283,16 +285,18 @@ var localeRU = Locale{
 	HelpConfig:   "Конфиг",
 	HelpFolder:   "Рабочая папка",
 
-	CtrlAddBreak:  "добавить перерыв",
-	CtrlPreset:    "перерыв из шаблона",
-	CtrlDelBreak:  "удалить перерыв",
-	CtrlHistory:   "история рабочих дней",
-	CtrlCheckbox:  "переключить чекбокс",
-	CtrlCopy:      "скопировать результат",
-	CtrlClear:     "очистить текущее поле",
-	CtrlSelect:    "выбрать",
-	HelpMode1Desc: "заполни «Оставшееся время»",
-	HelpMode2Desc: "заполни «Отработано» и «План»",
+	CtrlAddBreak:    "добавить перерыв",
+	CtrlPreset:      "перерыв из шаблона",
+	CtrlDelBreak:    "удалить перерыв",
+	CtrlHistory:     "история рабочих дней",
+	CtrlCheckbox:    "переключить чекбокс",
+	CtrlCopy:        "скопировать результат",
+	CtrlClear:       "очистить текущее поле",
+	CtrlSelect:      "выбрать",
+	CtrlCurrentTime: "вставить текущее время",
+	CtrlQuickInput:  "быстрый ввод значения",
+	HelpMode1Desc:   "заполни «Оставшееся время»",
+	HelpMode2Desc:   "заполни «Отработано» и «План»",
 }
 
 var localeEN = Locale{
@@ -422,16 +426,18 @@ var localeEN = Locale{
 	HelpConfig:   "Config",
 	HelpFolder:   "Work folder",
 
-	CtrlAddBreak:  "add break",
-	CtrlPreset:    "break from preset",
-	CtrlDelBreak:  "delete break",
-	CtrlHistory:   "work day history",
-	CtrlCheckbox:  "toggle checkbox",
-	CtrlCopy:      "copy result",
-	CtrlClear:     "clear current field",
-	CtrlSelect:    "select",
-	HelpMode1Desc: "fill \"Remaining time\"",
-	HelpMode2Desc: "fill \"Worked\" and \"Plan\"",
+	CtrlAddBreak:    "add break",
+	CtrlPreset:      "break from preset",
+	CtrlDelBreak:    "delete break",
+	CtrlHistory:     "work day history",
+	CtrlCheckbox:    "toggle checkbox",
+	CtrlCopy:        "copy result",
+	CtrlClear:       "clear current field",
+	CtrlSelect:      "select",
+	CtrlCurrentTime: "insert current time",
+	CtrlQuickInput:  "quick input value",
+	HelpMode1Desc:   "fill \"Remaining time\"",
+	HelpMode2Desc:   "fill \"Worked\" and \"Plan\"",
 }
 
 // LoadLocale возвращает локаль по коду языка. Неизвестный код → русский.

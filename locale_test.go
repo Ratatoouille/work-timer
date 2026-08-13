@@ -93,6 +93,8 @@ func TestLocaleAllFieldsNonEmpty(t *testing.T) {
 			"HelpNormal":           loc.HelpNormal,
 			"HowModes":             loc.HowModes,
 			"CtrlAddBreak":         loc.CtrlAddBreak,
+			"CtrlCurrentTime":      loc.CtrlCurrentTime,
+			"CtrlQuickInput":       loc.CtrlQuickInput,
 			"HelpMode1Desc":        loc.HelpMode1Desc,
 		}
 
