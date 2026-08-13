@@ -157,8 +157,8 @@ type Locale struct {
 }
 
 var localeRU = Locale{
-	ModeNormal:     "NORMAL",
-	ModeInsert:     "INSERT",
+	ModeNormal:     "Обычный",
+	ModeInsert:     "Ввод",
 	NoFileSelected: "○ файл не выбран",
 
 	SectionMain:   "Основные параметры",
@@ -176,20 +176,20 @@ var localeRU = Locale{
 	CheckboxAddTZ:      "Конвертировать timezone",
 	CheckboxShowIn:     "Показать в %s",
 
-	RemainingLabel: "ОСТАЛОСЬ",
-	HeroDoneLabel:  "РАБОЧИЙ ДЕНЬ ЗАВЕРШЁН",
+	RemainingLabel: "Осталось",
+	HeroDoneLabel:  "Рабочий день завершён",
 
-	StateRunning:  "РАБОТАЕМ",
-	StatePaused:   "ПЕРЕРЫВ",
-	StateDone:     "ГОТОВО",
-	StateOvertime: "ПЕРЕРАБОТКА",
+	StateRunning:  "Работаем",
+	StatePaused:   "Перерыв",
+	StateDone:     "Готово",
+	StateOvertime: "Переработка",
 
 	StatMode:    "Режим",
 	StatMode1:   "Режим 1",
 	StatMode2:   "Режим 2",
 	StatModeOff: "Режим",
-	StatOn:      "ВКЛ",
-	StatOff:     "ВЫКЛ",
+	StatOn:      "Вкл",
+	StatOff:     "Выкл",
 
 	BreakWord:      "Перерыв",
 	DurFormatHours: "%dч %02dм",
@@ -296,8 +296,8 @@ var localeRU = Locale{
 }
 
 var localeEN = Locale{
-	ModeNormal:     "NORMAL",
-	ModeInsert:     "INSERT",
+	ModeNormal:     "Normal",
+	ModeInsert:     "Insert",
 	NoFileSelected: "○ no file selected",
 
 	SectionMain:   "Main parameters",
@@ -315,20 +315,20 @@ var localeEN = Locale{
 	CheckboxAddTZ:      "Convert timezone",
 	CheckboxShowIn:     "Show in %s",
 
-	RemainingLabel: "REMAINING",
-	HeroDoneLabel:  "WORK DAY COMPLETE",
+	RemainingLabel: "Remaining",
+	HeroDoneLabel:  "Work day complete",
 
-	StateRunning:  "RUNNING",
-	StatePaused:   "PAUSED",
-	StateDone:     "DONE",
-	StateOvertime: "OVERTIME",
+	StateRunning:  "Running",
+	StatePaused:   "Paused",
+	StateDone:     "Done",
+	StateOvertime: "Overtime",
 
 	StatMode:    "Mode",
 	StatMode1:   "Mode 1",
 	StatMode2:   "Mode 2",
 	StatModeOff: "Mode",
-	StatOn:      "ON",
-	StatOff:     "OFF",
+	StatOn:      "On",
+	StatOff:     "Off",
 
 	BreakWord:      "Break",
 	DurFormatHours: "%dh %02dm",

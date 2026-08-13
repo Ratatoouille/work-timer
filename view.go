@@ -22,17 +22,18 @@ var (
 	colorResult  color.Color
 	colorWarn    color.Color
 
-	fieldBoxStyle    lipgloss.Style
-	fieldActiveStyle lipgloss.Style
-	containerStyle   lipgloss.Style
-	headerStyle      lipgloss.Style
-	modeNormalStyle  lipgloss.Style
-	modeInsertStyle  lipgloss.Style
-	statusBarStyle   lipgloss.Style
-	fileNameStyle    lipgloss.Style
-	dirtyDotStyle    lipgloss.Style
-	statusDotStyle   lipgloss.Style
-	clockStyle       lipgloss.Style
+	fieldBoxStyle     lipgloss.Style
+	fieldActiveStyle  lipgloss.Style
+	focusedValueStyle lipgloss.Style
+	containerStyle    lipgloss.Style
+	headerStyle       lipgloss.Style
+	modeNormalStyle   lipgloss.Style
+	modeInsertStyle   lipgloss.Style
+	statusBarStyle    lipgloss.Style
+	fileNameStyle     lipgloss.Style
+	dirtyDotStyle     lipgloss.Style
+	statusDotStyle    lipgloss.Style
+	clockStyle        lipgloss.Style
 
 	sectionBreakHeaderStyle lipgloss.Style
 	sectionDividerStyle     lipgloss.Style
@@ -75,6 +76,11 @@ func initStyles(cfg Config) {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(colorAccent).
 		Padding(0, 1)
+	// Выбранное поле в Normal-режиме: инверсия, чтобы фокус был очевиден.
+	focusedValueStyle = lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("0")).
+		Background(colorAccent)
 
 	containerStyle = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -461,7 +467,7 @@ func (m Model) renderTimerRow() string {
 	} else if m.startTime.Value() != "" {
 		start = paramValueStyle.Render(m.startTime.Value())
 		if m.cursor == FieldStartTime {
-			start = paramValueStyle.Underline(true).Foreground(colorAccent).Render(m.startTime.Value())
+			start = focusedValueStyle.Render(m.startTime.Value())
 		}
 	} else {
 		start = statusBarStyle.Render("—:—")
@@ -516,21 +522,21 @@ func (m Model) renderBreakRow(idx, baseIndex int, br Break) string {
 	if from != "" {
 		st := breakTimeStyle
 		if focusedFrom {
-			st = st.Bold(true).Underline(true)
+			st = focusedValueStyle
 		}
 		dispFrom = st.Render(from)
 	} else if focusedFrom {
-		dispFrom = offStyle.Render("▍" + m.locale.PlaceholderTime)
+		dispFrom = focusedValueStyle.Render("▍" + m.locale.PlaceholderTime)
 	}
 	dispTo := offStyle.Render("—:—")
 	if to != "" {
 		st := breakTimeStyle
 		if focusedTo {
-			st = st.Bold(true).Underline(true)
+			st = focusedValueStyle
 		}
 		dispTo = st.Render(to)
 	} else if focusedTo {
-		dispTo = offStyle.Render("▍" + m.locale.PlaceholderTime)
+		dispTo = focusedValueStyle.Render("▍" + m.locale.PlaceholderTime)
 	}
 
 	sep := 6
