@@ -7,7 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-const version = "2.1.2"
+const version = "2.1.3"
 
 func main() {
 	saveFile := ""
