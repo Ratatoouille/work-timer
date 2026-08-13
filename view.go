@@ -569,15 +569,22 @@ func (m Model) renderParams() string {
 	}
 	b.WriteString(m.renderPairAt(m.locale.StatMode, modeStr, col) + "\n")
 
-	// Поля ввода для активного режима (это входные данные, а не дубликат
-	// runtime state). Режим 1 — "оставшееся время"; режим 2 — отработано/план.
-	switch {
-	case m.mode2Active():
-		b.WriteString(m.renderValueFieldAt(FieldWorked, m.locale.FieldWorked, m.worked, true, col) + "\n")
-		b.WriteString(m.renderValueFieldAt(FieldPlan, m.locale.FieldPlan, m.plan, true, col) + "\n")
-	case m.mode1Active():
-		b.WriteString(m.renderValueFieldAt(FieldWorkTime, m.locale.FieldRemainingTime, m.workTime, false, col) + "\n")
+	// Поля ввода обоих режимов. Всегда рендерим, чтобы у каждого поля был
+	// видимый экранный фокус; неактивная группа приглушается.
+	timeField := m.renderValueFieldAt(FieldWorkTime, m.locale.FieldRemainingTime, m.workTime, false, col)
+	workedField := m.renderValueFieldAt(FieldWorked, m.locale.FieldWorked, m.worked, true, col)
+	planField := m.renderValueFieldAt(FieldPlan, m.locale.FieldPlan, m.plan, true, col)
+
+	if m.mode2Active() {
+		timeField = offStyle.Render(timeField)
 	}
+	if m.mode1Active() {
+		workedField = offStyle.Render(workedField)
+		planField = offStyle.Render(planField)
+	}
+	b.WriteString(timeField + "\n")
+	b.WriteString(workedField + "\n")
+	b.WriteString(planField + "\n")
 
 	tzVal := offStyle.Render("Нет")
 	if m.addTZ {

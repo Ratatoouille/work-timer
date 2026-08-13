@@ -17,7 +17,7 @@ type Locale struct {
 	FieldStart         string
 	FieldEnd           string
 	FieldMode1Label    string
-	FieldRemainingTime string
+	FieldRemainingTime string // "Рабочее время" — входное поле режима 1
 	FieldMode2Label    string
 	FieldWorked        string
 	FieldPlan          string
@@ -171,7 +171,7 @@ var localeRU = Locale{
 	FieldStart:         "Начало",
 	FieldEnd:           "Окончание",
 	FieldMode1Label:    "режим 1: оставшееся время",
-	FieldRemainingTime: "Оставшееся время",
+	FieldRemainingTime: "Рабочее время",
 	FieldMode2Label:    "режим 2: отработано / план",
 	FieldWorked:        "Отработано",
 	FieldPlan:          "План",
@@ -312,7 +312,7 @@ var localeEN = Locale{
 	FieldStart:         "Start",
 	FieldEnd:           "End",
 	FieldMode1Label:    "mode 1: remaining time",
-	FieldRemainingTime: "Remaining time",
+	FieldRemainingTime: "Work time",
 	FieldMode2Label:    "mode 2: worked / plan",
 	FieldWorked:        "Worked",
 	FieldPlan:          "Plan",
