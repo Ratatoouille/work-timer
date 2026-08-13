@@ -51,16 +51,23 @@ type Locale struct {
 	BreakRight string // "Перерыв %d — вернулся:"
 
 	// --- Результат ---
-	ResultLabel string
-	Remaining   string
+	ResultLabel  string
+	Remaining    string
+	RemainingCap string // "Осталось" (капитализированный/полный вариант для секции Результат)
+	Status       string // "Статус"
 
 	// --- Панель управления ---
-	CtrlNav  string
-	CtrlEdit string
-	CtrlSave string
-	CtrlOpen string
-	CtrlHelp string
-	CtrlQuit string
+	CtrlNav    string
+	CtrlEdit   string
+	CtrlSave   string
+	CtrlOpen   string
+	CtrlHelp   string
+	CtrlQuit   string
+	CtrlDelete string
+	CtrlRename string
+	CtrlNew    string
+	CtrlCancel string
+	CtrlSearch string
 
 	// --- Промпты ---
 	SaveTitle       string
@@ -72,6 +79,8 @@ type Locale struct {
 	FileListEmpty   string
 	FileListHintNew string
 	FileListHint    string
+	FileListHint2   string
+	FileSearchLabel string
 	ConfirmDelete   string
 	RenamePrompt    string
 	PresetTitle     string
@@ -166,31 +175,40 @@ var localeRU = Locale{
 	BreakLeft:  "Перерыв %d — начало",
 	BreakRight: "Перерыв %d — конец",
 
-	ResultLabel: "Время окончания",
-	Remaining:   "ост.",
+	ResultLabel:  "Время окончания",
+	Remaining:    "ост.",
+	RemainingCap: "Осталось",
+	Status:       "Статус",
 
-	CtrlNav:  "навиг.",
-	CtrlEdit: "редакт.",
-	CtrlSave: "сохранить",
-	CtrlOpen: "открыть",
-	CtrlHelp: "справка",
-	CtrlQuit: "выход",
+	CtrlNav:    "навиг.",
+	CtrlEdit:   "редакт.",
+	CtrlSave:   "сохранить",
+	CtrlOpen:   "открыть",
+	CtrlHelp:   "справка",
+	CtrlQuit:   "выход",
+	CtrlDelete: "удалить",
+	CtrlRename: "переимен.",
+	CtrlNew:    "новый",
+	CtrlCancel: "отмена",
+	CtrlSearch: "поиск",
 
-	SaveTitle:       "💾 Сохранить как",
+	SaveTitle:       "Сохранить как",
 	SaveFolder:      "Папка: %s",
 	SaveHint:        "[Enter] сохранить  [Esc] отмена",
-	LoadTitle:       "📂 Загрузить из файла",
+	LoadTitle:       "Загрузить из файла",
 	LoadHint:        "[Enter] загрузить  [Esc] отмена",
-	FileListTitle:   "📂 Выберите файл",
+	FileListTitle:   "Выберите файл",
 	FileListEmpty:   "Нет сохранённых файлов",
 	FileListHintNew: "[n] создать новый  [Esc] отмена",
-	FileListHint:    "[j/k ↑↓] навигация  [Enter] выбрать  [/] поиск  [d] удалить  [r] переименовать  [n] новый  [Esc] отмена",
+	FileListHint:    "[j/k ↑↓] навигация  [Enter] выбрать",
+	FileListHint2:   "[/] поиск  [d] удалить  [r] переименовать  [n] новый  [Esc] отмена",
+	FileSearchLabel: "Search",
 	ConfirmDelete:   "⚠  Удалить %s? [y] да  [n/Esc] отмена",
-	RenamePrompt:    "✏  Новое имя:",
-	PresetTitle:     "☕ Добавить перерыв из шаблона",
+	RenamePrompt:    "Новое имя:",
+	PresetTitle:     "Добавить перерыв из шаблона",
 	PresetEmpty:     "Шаблоны перерывов не настроены",
 	PresetHint:      "[j/k ↑↓] выбрать  [Enter] добавить  [Esc] отмена",
-	HistoryTitle:    "📜 История рабочих дней",
+	HistoryTitle:    "История рабочих дней",
 	HistoryEmpty:    "История пуста",
 	HistoryHint:     "[j/k ↑↓] навигация  [Enter] открыть файл  [Esc] отмена",
 	HistoryColDate:  "Дата",
@@ -320,31 +338,40 @@ var localeEN = Locale{
 	BreakLeft:  "Break %d — start",
 	BreakRight: "Break %d — end",
 
-	ResultLabel: "End time",
-	Remaining:   "left",
+	ResultLabel:  "End time",
+	Remaining:    "left",
+	RemainingCap: "Remaining",
+	Status:       "Status",
 
-	CtrlNav:  "nav",
-	CtrlEdit: "edit",
-	CtrlSave: "save",
-	CtrlOpen: "open",
-	CtrlHelp: "help",
-	CtrlQuit: "quit",
+	CtrlNav:    "nav",
+	CtrlEdit:   "edit",
+	CtrlSave:   "save",
+	CtrlOpen:   "open",
+	CtrlHelp:   "help",
+	CtrlQuit:   "quit",
+	CtrlDelete: "delete",
+	CtrlRename: "rename",
+	CtrlNew:    "new",
+	CtrlCancel: "cancel",
+	CtrlSearch: "search",
 
-	SaveTitle:       "💾 Save as",
+	SaveTitle:       "Save as",
 	SaveFolder:      "Folder: %s",
 	SaveHint:        "[Enter] save  [Esc] cancel",
-	LoadTitle:       "📂 Load from file",
+	LoadTitle:       "Load from file",
 	LoadHint:        "[Enter] load  [Esc] cancel",
-	FileListTitle:   "📂 Select file",
+	FileListTitle:   "Select file",
 	FileListEmpty:   "No saved files",
 	FileListHintNew: "[n] create new  [Esc] cancel",
-	FileListHint:    "[j/k ↑↓] navigate  [Enter] select  [/] search  [d] delete  [r] rename  [n] new  [Esc] cancel",
+	FileListHint:    "[j/k ↑↓] navigate  [Enter] select",
+	FileListHint2:   "[/] search  [d] delete  [r] rename  [n] new  [Esc] cancel",
+	FileSearchLabel: "Search",
 	ConfirmDelete:   "⚠  Delete %s? [y] yes  [n/Esc] cancel",
-	RenamePrompt:    "✏  New name:",
-	PresetTitle:     "☕ Add break from preset",
+	RenamePrompt:    "New name:",
+	PresetTitle:     "Add break from preset",
 	PresetEmpty:     "No break presets configured",
 	PresetHint:      "[j/k ↑↓] select  [Enter] add  [Esc] cancel",
-	HistoryTitle:    "📜 Work day history",
+	HistoryTitle:    "Work day history",
 	HistoryEmpty:    "History is empty",
 	HistoryHint:     "[j/k ↑↓] navigate  [Enter] open file  [Esc] cancel",
 	HistoryColDate:  "Date",

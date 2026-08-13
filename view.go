@@ -296,60 +296,112 @@ func (m Model) renderHeader() string {
 }
 
 // renderSectionHeader рисует разделитель секции с заголовком.
-func (m Model) renderSectionHeader(icon, title string, style lipgloss.Style) string {
-	text := style.Render(icon + " " + title + " ")
+// "▾" обозначает раскрытую секцию (в отличие от "▸" — маркера выбора).
+func (m Model) renderSectionHeader(title string, style lipgloss.Style) string {
+	text := style.Render("▾ " + title + " ")
 	lineLen := max(m.dividerWidth()-lipgloss.Width(text), 2)
 	line := sectionDividerStyle.Render(strings.Repeat("─", lineLen))
 	return "\n" + lipgloss.JoinHorizontal(lipgloss.Left, text, line) + "\n"
 }
 
-// renderHero — крупный блок "оставшееся время" + статус + прогресс.
+// runtimeState возвращает состояние таймера на основе фактического времени
+// относительно рабочего окна. Определяется из существующих данных (start,
+// endTimeRaw, breaks), без новой бизнес-логики.
+func (m Model) runtimeState() timerState {
+	percent, _, remaining, ok := m.progressInfo()
+
+	switch {
+	case !ok:
+		if m.hasTimerInput() {
+			return stateReady
+		}
+		return stateIdle
+	case percent >= 1.0 && remaining <= 0:
+		return stateDone
+	case percent >= 1.0:
+		return stateOvertime
+	case m.onBreak():
+		return statePaused
+	default:
+		return stateRunning
+	}
+}
+
+// hasTimerInput — есть ли какие-то введённые данные таймера (не пустой экран).
+func (m Model) hasTimerInput() bool {
+	return m.startTime.Value() != "" || m.workTime.Value() != "" ||
+		m.worked.Value() != "" || m.plan.Value() != "" || len(m.breaks) > 0
+}
+
+// renderHero — крупный блок "оставшееся время" + прогресс.
+// value = оставшееся время, bar = доля прошедшего времени рабочего окна.
+// Статус выводится отдельным бейджем, чтобы не возникало противоречия
+// "ОСТАЛОСЬ 09:00" рядом с "ГОТОВО".
 func (m Model) renderHero() string {
-	seconds := m.resultSeconds()
+	percent, _, _, ok := m.progressInfo()
 
-	value := "—:—"
-	stateStr := ""
-	if seconds > 0 {
-		t := time.Duration(seconds) * time.Second
-		hours := int(t.Hours())
-		mins := int(t.Minutes()) % 60
-		value = fmt.Sprintf("%02d:%02d", hours, mins)
+	value := m.heroRemaining()
+	badge := m.statusBadge()
 
-		_, _, remaining, ok := m.progressInfo()
-		stateStr = m.statusWord(ok, remaining)
+	line := value
+	if badge != "" {
+		line = lipgloss.JoinHorizontal(lipgloss.Center, value, badge)
 	}
 
-	heroV := heroValueStyle.Render(value)
-	if stateStr != "" {
-		heroV = lipgloss.JoinHorizontal(lipgloss.Center, heroV, "  ", stateStr)
-	}
-
-	var bar string
-	if percent, _, _, ok := m.progressInfo(); ok {
+	bar := m.renderEmptyProgressBar()
+	if ok {
 		bar = m.renderProgressBar(percent)
-	} else {
-		bar = m.renderEmptyProgressBar()
 	}
 
-	return "\n" + heroLabelStyle.Render(m.locale.RemainingLabel) + "\n\n" +
-		heroV + "\n\n" +
+	return "\n" + heroLabelStyle.Render(m.locale.RemainingLabel+":") + "\n\n" +
+		line + "\n\n" +
 		bar + "\n\n"
 }
 
-func (m Model) statusWord(ok bool, remaining time.Duration) string {
-	switch {
-	case m.dayEnded:
-		return statusSuccessStyle.Render(m.locale.StateDone)
-	case !ok:
-		return timerStateStyle.Render(m.locale.StateRunning)
-	case remaining <= 0:
-		return statusErrorStyle.Render(m.locale.StateOvertime)
-	case m.onBreak():
-		return statusWarnStyle.Render(m.locale.StatePaused)
-	default:
-		return timerStateStyle.Render(m.locale.StateRunning)
+// heroRemaining возвращает главное значение оставшегося времени.
+// Когда рабочий день завершён — показывает "00:00", иначе вычисленное осталось.
+func (m Model) heroRemaining() string {
+	if m.runtimeState() == stateDone {
+		return heroValueStyle.Render("00:00")
 	}
+	if secs := m.resultSeconds(); secs > 0 {
+		t := time.Duration(secs) * time.Second
+		return heroValueStyle.Render(fmt.Sprintf("%02d:%02d", int(t.Hours()), int(t.Minutes())%60))
+	}
+	return heroValueStyle.Render("—:—")
 }
+
+// statusBadge возвращает бейдж состояния таймера (цветной текст) или пустую строку.
+func (m Model) statusBadge() string {
+	st := m.runtimeState()
+	var s string
+	switch st {
+	case stateRunning:
+		s = timerStateStyle.Render(m.locale.StateRunning)
+	case statePaused:
+		s = statusWarnStyle.Render(m.locale.StatePaused)
+	case stateDone:
+		s = statusSuccessStyle.Render(m.locale.StateDone)
+	case stateOvertime:
+		s = statusErrorStyle.Render(m.locale.StateOvertime)
+	case stateReady:
+		s = timerStateStyle.Render(m.locale.StateRunning)
+	default:
+		return ""
+	}
+	return "  " + s
+}
+
+type timerState int
+
+const (
+	stateIdle timerState = iota
+	stateReady
+	stateRunning
+	statePaused
+	stateDone
+	stateOvertime
+)
 
 // onBreak возвращает true, если текущее время попадает в один из перерывов.
 func (m Model) onBreak() bool {
@@ -420,7 +472,7 @@ func (m Model) renderBreaks() string {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString(m.renderSectionHeader("▸", m.locale.SectionBreaks, sectionBreakHeaderStyle))
+	b.WriteString(m.renderSectionHeader(m.locale.SectionBreaks, sectionBreakHeaderStyle))
 	for i, br := range m.breaks {
 		baseIndex := FieldBreaksStart + i*2
 		b.WriteString(m.renderBreakRow(i, baseIndex, br) + "\n")
@@ -472,7 +524,7 @@ func (m Model) renderBreakRow(idx, baseIndex int, br Break) string {
 
 func (m Model) renderParams() string {
 	var b strings.Builder
-	b.WriteString(m.renderSectionHeader("▸", m.locale.SectionParams, sectionBreakHeaderStyle))
+	b.WriteString(m.renderSectionHeader(m.locale.SectionParams, sectionBreakHeaderStyle))
 
 	col := m.labelCol(
 		m.locale.StatMode,
@@ -482,26 +534,39 @@ func (m Model) renderParams() string {
 		checkboxLabel(m),
 	)
 
-	// Режим
+	// Режим: показываем номер и описание как состояние, а не "кнопку".
 	var modeStr string
 	switch {
 	case m.mode2Active():
-		modeStr = statusSuccessStyle.Render(m.locale.StatMode2 + "  " + m.locale.StatOn)
+		modeStr = paramValueStyle.Render("2 · " + m.locale.FieldWorked + " / " + m.locale.FieldPlan)
 	case m.mode1Active():
-		modeStr = modeNormalStyle.Render(m.locale.StatMode1 + "  " + m.locale.StatOn)
+		modeStr = paramValueStyle.Render("1 · " + m.locale.FieldRemainingTime)
 	default:
-		modeStr = offStyle.Render(m.locale.StatModeOff + "  " + m.locale.StatOff)
+		modeStr = offStyle.Render("—")
 	}
 	b.WriteString(m.renderPairAt(m.locale.StatMode, modeStr, col) + "\n")
-	b.WriteString(m.renderValueFieldAt(FieldWorkTime, m.locale.FieldRemainingTime, m.workTime, false, col) + "\n")
-	b.WriteString(m.renderValueFieldAt(FieldWorked, m.locale.FieldWorked, m.worked, true, col) + "\n")
-	b.WriteString(m.renderValueFieldAt(FieldPlan, m.locale.FieldPlan, m.plan, true, col) + "\n")
 
-	tzVal := offStyle.Render("[  ]")
-	if m.addTZ && m.cursor == FieldAddTZ {
-		tzVal = paramValueStyle.Underline(true).Foreground(colorAccent).Render("[x]")
-	} else if m.addTZ {
-		tzVal = paramValueStyle.Render("[x]")
+	// Поля редактируются независимо от активного режима (навигация и ввод не
+	// должны ломаться), но неактивная группа визуально приглушается.
+	timeField := m.renderValueFieldAt(FieldWorkTime, m.locale.FieldRemainingTime, m.workTime, false, col)
+	workedField := m.renderValueFieldAt(FieldWorked, m.locale.FieldWorked, m.worked, true, col)
+	planField := m.renderValueFieldAt(FieldPlan, m.locale.FieldPlan, m.plan, true, col)
+
+	if m.mode2Active() {
+		timeField = offStyle.Render(timeField)
+	}
+	if m.mode1Active() {
+		workedField = offStyle.Render(workedField)
+		planField = offStyle.Render(planField)
+	}
+
+	b.WriteString(timeField + "\n")
+	b.WriteString(workedField + "\n")
+	b.WriteString(planField + "\n")
+
+	tzVal := offStyle.Render("Нет")
+	if m.addTZ {
+		tzVal = statusSuccessStyle.Render("Да")
 	}
 	tzLabel := m.valueLabelStyle(m.cursor == FieldAddTZ)
 	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Left, tzLabel.Width(col).Render(checkboxLabel(m)), "  ", tzVal) + "\n")
@@ -611,7 +676,7 @@ func (m Model) renderResult() string {
 	}
 
 	var b strings.Builder
-	b.WriteString(m.renderSectionHeader("▸", m.locale.SectionResult, resultValueStyle))
+	b.WriteString(m.renderSectionHeader(m.locale.SectionResult, resultValueStyle))
 
 	if m.err != "" {
 		b.WriteString("  " + errorStyle.Render("✗  "+m.err) + "\n")
@@ -621,27 +686,40 @@ func (m Model) renderResult() string {
 	_, elapsed, remaining, ok := m.progressInfo()
 	col := m.labelCol(m.locale.FieldWorked, m.locale.Remaining)
 
-	var row string
-	if ok {
-		row = lipgloss.JoinHorizontal(lipgloss.Left,
-			paramLabelStyle.Width(col).Render(m.locale.FieldWorked),
-			"  ",
-			paramValueStyle.Render(formatDuration(elapsed)),
-			"     ",
-			paramLabelStyle.Width(col).Render(m.locale.Remaining),
-			"  ",
-			paramValueStyle.Render(formatDuration(remaining)),
-		)
+	// Итоговая сводка: отработано и осталось (или окончено). Прогресс-бар не
+	// дублируем — он уже показан в верхнем блоке.
+	startStr := "  " + m.renderSummaryRow(m.locale.FieldWorked, formatDuration(elapsed), col)
+	b.WriteString(startStr + "\n")
+
+	st := m.runtimeState()
+
+	if ok && st != stateDone && st != stateOvertime {
+		b.WriteString("  " + m.renderSummaryRow(m.locale.RemainingCap, formatDuration(remaining), col) + "\n")
 	} else {
-		row = lipgloss.JoinHorizontal(lipgloss.Left,
-			paramLabelStyle.Width(col).Render(m.locale.FieldEnd),
-			"  ",
-			m.formatResultEnd(),
-		)
+		var statusStr string
+		switch st {
+		case stateDone:
+			statusStr = statusSuccessStyle.Render(m.locale.StateDone)
+		case stateOvertime:
+			statusStr = statusErrorStyle.Render(m.locale.StateOvertime)
+		case statePaused:
+			statusStr = statusWarnStyle.Render(m.locale.StatePaused)
+		default:
+			statusStr = timerStateStyle.Render(m.locale.StateRunning)
+		}
+		b.WriteString("  " + m.renderSummaryRow(m.locale.Status, statusStr, col) + "\n")
 	}
 
-	b.WriteString("  " + row + "\n")
 	return b.String()
+}
+
+// renderSummaryRow — строка label/value с общим выравниванием колонки.
+func (m Model) renderSummaryRow(label, value string, col int) string {
+	return lipgloss.JoinHorizontal(lipgloss.Left,
+		paramLabelStyle.Width(col).Render(label),
+		"  ",
+		value,
+	)
 }
 
 // formatResultEnd возвращает время окончания с подписью часового пояса (UTC+07).
@@ -848,7 +926,7 @@ func formatShortDuration(d time.Duration, loc Locale) string {
 func (m Model) renderControls() string {
 	k := func(s string) string { return controlKeyStyle.Render(s) }
 	d := func(s string) string { return statusBarStyle.Render(s) }
-	dot := headerDividerStyle.Render("  ·  ")
+	dot := headerDividerStyle.Render(" · ")
 	divW := m.dividerWidth()
 
 	if m.mode == ModeInsert {
@@ -856,12 +934,12 @@ func (m Model) renderControls() string {
 	}
 
 	line := strings.Join([]string{
-		k("j/k") + "  " + d(m.locale.CtrlNav),
-		k("i") + "  " + d(m.locale.CtrlEdit),
-		k("s") + "  " + d(m.locale.CtrlSave),
-		k("o") + "  " + d(m.locale.CtrlOpen),
-		k("?") + "  " + d(m.locale.CtrlHelp),
-		k("q") + "  " + d(m.locale.CtrlQuit),
+		k("j/k") + " " + d(m.locale.CtrlNav),
+		k("i") + " " + d(m.locale.CtrlEdit),
+		k("s") + " " + d(m.locale.CtrlSave),
+		k("o") + " " + d(m.locale.CtrlOpen),
+		k("?") + " " + d(m.locale.CtrlHelp),
+		k("q") + " " + d(m.locale.CtrlQuit),
 	}, dot)
 
 	return controlsBarStyle.Width(divW).Render(line)
@@ -896,42 +974,55 @@ func (m Model) renderLoadPrompt() string {
 
 func (m Model) renderFileList() string {
 	var b strings.Builder
+
+	// Единый заголовок (в стиле заголовка приложения), без декоративного emoji.
 	b.WriteString(headerStyle.Render(m.locale.FileListTitle) + "\n\n")
+
+	// Путь — приглушённый, не доминирует.
 	b.WriteString(statusBarStyle.Render(fmt.Sprintf(m.locale.SaveFolder, m.workDir)) + "\n\n")
 
-	divider := sectionDividerStyle.Render(strings.Repeat("─", 40))
-	b.WriteString(divider + "\n")
-
-	// Поле поиска
-	searchLabel := statusBarStyle.Render("Search: ")
-	b.WriteString(searchLabel + m.fileSearchInput.View() + "\n\n")
-
-	b.WriteString(divider + "\n")
+	// Поиск — обычное TUI-поле (активируется клавишей "/").
+	var searchInput string
+	if m.fileSearchInput.Focused() {
+		searchInput = fieldActiveStyle.Render(m.fileSearchInput.View())
+	} else {
+		searchInput = paramValueStyle.Render(m.fileSearchInput.View())
+	}
+	b.WriteString(paramLabelStyle.Render(m.locale.FileSearchLabel+":") + " " + searchInput + "\n\n")
 
 	if len(m.availableFiles) == 0 {
 		b.WriteString("\n  " + statusBarStyle.Render(m.locale.FileListEmpty) + "\n\n")
-		b.WriteString(divider + "\n\n")
 		b.WriteString(statusBarStyle.Render(m.locale.FileListHintNew))
-	} else {
-		b.WriteString("\n")
-		for i, file := range m.availableFiles {
-			if i == m.fileListCursor {
-				b.WriteString(fileListItemActiveStyle.Render("▶ "+file) + "\n")
-			} else {
-				b.WriteString(fileListItemStyle.Render("  "+file) + "\n")
-			}
-		}
-		b.WriteString("\n" + divider + "\n\n")
+		return promptStyle.Render(b.String())
+	}
 
-		if m.renaming {
-			b.WriteString(statusBarStyle.Render(m.locale.RenamePrompt+" ") + m.renameInput.View() + "\n\n")
-			b.WriteString(statusBarStyle.Render("[Enter] rename  [Esc] cancel"))
-		} else if m.confirmDelete && m.statusMessage != "" {
-			b.WriteString(statusWarnStyle.Render(m.statusMessage))
+	// Список файлов. Выбранный — с маркером "▸" и highlight.
+	for i, file := range m.availableFiles {
+		if i == m.fileListCursor {
+			b.WriteString(fileListItemActiveStyle.Render("▸ "+file) + "\n")
 		} else {
-			b.WriteString(statusBarStyle.Render(m.locale.FileListHint))
+			b.WriteString(fileListItemStyle.Render("  "+file) + "\n")
 		}
 	}
+
+	b.WriteString("\n")
+
+	// Состояние: переименование / подтверждение удаления.
+	if m.renaming {
+		b.WriteString(statusBarStyle.Render(m.locale.RenamePrompt+" ") + m.renameInput.View() + "\n")
+		b.WriteString(statusBarStyle.Render("[Enter] rename  [Esc] cancel") + "\n")
+	} else if m.confirmDelete && m.statusMessage != "" {
+		b.WriteString(statusWarnStyle.Render(m.statusMessage) + "\n")
+	}
+
+	// Footer сгруппирован в две строки, клавиши выделены.
+	fk := func(s string) string { return controlKeyStyle.Render(s) }
+	fd := func(s string) string { return statusBarStyle.Render(s) }
+	b.WriteString("\n" + fk("j/k") + " " + fd(m.locale.CtrlNav) + "   " + fk("Enter") + " " + fd(m.locale.CtrlOpen) +
+		"   " + fk("/") + " " + fd(m.locale.CtrlSearch) + "\n")
+	b.WriteString(fk("d") + " " + fd(m.locale.CtrlDelete) + "   " + fk("r") + " " + fd(m.locale.CtrlRename) +
+		"   " + fk("n") + " " + fd(m.locale.CtrlNew) + "   " + fk("Esc") + " " + fd(m.locale.CtrlCancel) + "\n")
+
 	return promptStyle.Render(b.String())
 }
 
@@ -945,7 +1036,7 @@ func (m Model) renderPresetList() string {
 		for i, preset := range m.config.Breaks {
 			label := fmt.Sprintf("%s  (%s – %s)", preset.Name, preset.From, preset.To)
 			if i == m.presetCursor {
-				b.WriteString(fileListItemActiveStyle.Render("▶ "+label) + "\n")
+				b.WriteString(fileListItemActiveStyle.Render("▸ "+label) + "\n")
 			} else {
 				b.WriteString(fileListItemStyle.Render("  "+label) + "\n")
 			}
@@ -984,7 +1075,7 @@ func (m Model) renderHistory() string {
 			line := fmt.Sprintf("%-12s %-6s %-8s %-10s %-6s",
 				e.Date, e.StartTime, e.EndTime, breaksInfo, e.SavedAt)
 			if i == m.historyCursor {
-				b.WriteString(fileListItemActiveStyle.Render("▶ "+line) + "\n")
+				b.WriteString(fileListItemActiveStyle.Render("▸ "+line) + "\n")
 			} else {
 				b.WriteString(fileListItemStyle.Render("  "+line) + "\n")
 			}
