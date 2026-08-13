@@ -840,13 +840,43 @@ func (m *Model) exitFileMode() {
 }
 
 func (m *Model) moveCursor(delta int) {
-	newCursor := m.cursor + delta
-
-	if newCursor >= 0 && newCursor < m.totalFields() {
-		m.cursor = newCursor
+	order := m.visualOrder()
+	i := indexOf(order, m.cursor)
+	if i < 0 {
+		return
+	}
+	newI := i + delta
+	if newI >= 0 && newI < len(order) {
+		m.cursor = order[newI]
 		m.blurAll()
 		m.focusCurrent()
 	}
+}
+
+// visualOrder возвращает порядок полей при навигации, соответствующий
+// визуальному расположению на экране: Start → перерывы → параметры.
+// Базовые поля: 0=Start, 1=WorkTime, 2=Worked, 3=Plan, 4=AddTZ.
+func (m Model) visualOrder() []int {
+	n := len(m.breaks)
+	order := make([]int, 0, FieldBreaksStart+n*2)
+	// Start (в строке "Начало / Окончание").
+	order = append(order, FieldStartTime)
+	// Перерывы (секция между временем и параметрами).
+	for i := 0; i < n; i++ {
+		order = append(order, FieldBreaksStart+i*2, FieldBreaksStart+i*2+1)
+	}
+	// Параметры: оставшееся время, отработано, план, чекбокс TZ.
+	order = append(order, FieldWorkTime, FieldWorked, FieldPlan, FieldAddTZ)
+	return order
+}
+
+func indexOf(s []int, v int) int {
+	for i, x := range s {
+		if x == v {
+			return i
+		}
+	}
+	return -1
 }
 
 func (m *Model) addBreak() {
