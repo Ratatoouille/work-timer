@@ -33,10 +33,10 @@ func TestRenderDoneNoStaleRemaining(t *testing.T) {
 	}
 
 	out := m.renderHero()
-	if !strings.Contains(out, "РАБОЧИЙ ДЕНЬ ЗАВЕРШЁН") {
+	if !strings.Contains(out, "Рабочий день завершён") {
 		t.Errorf("DONE hero should show completion label, got:\n%s", out)
 	}
-	if strings.Contains(out, "ОСТАЛОСЬ") {
+	if strings.Contains(out, "Осталось") {
 		t.Errorf("DONE hero should not show REMAINING label, got:\n%s", out)
 	}
 
@@ -70,10 +70,10 @@ func TestRenderRunning(t *testing.T) {
 	}
 
 	out := m.renderHero()
-	if !strings.Contains(out, "ОСТАЛОСЬ") {
+	if !strings.Contains(out, "Осталось") {
 		t.Errorf("running hero should show REMAINING label:\n%s", out)
 	}
-	if !strings.Contains(out, "РАБОТАЕМ") {
+	if !strings.Contains(out, "Работаем") {
 		t.Errorf("running hero should show RUNNING badge:\n%s", out)
 	}
 }
@@ -92,7 +92,7 @@ func TestRenderPaused(t *testing.T) {
 	}
 
 	out := m.renderHero()
-	if !strings.Contains(out, "ПЕРЕРЫВ") {
+	if !strings.Contains(out, "Перерыв") {
 		t.Errorf("paused hero should show PAUSED badge:\n%s", out)
 	}
 }
