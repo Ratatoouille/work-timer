@@ -572,7 +572,15 @@ func (m Model) renderParams() string {
 	if m.addTZ {
 		tzVal = statusSuccessStyle.Render("Да")
 	}
-	tzLabel := m.valueLabelStyle(m.cursor == FieldAddTZ)
+	tzFocused := m.cursor == FieldAddTZ
+	tzLabel := m.valueLabelStyle(tzFocused)
+	if tzFocused {
+		s := "Нет"
+		if m.addTZ {
+			s = "Да"
+		}
+		tzVal = paramValueStyle.Underline(true).Foreground(colorError).Render(s)
+	}
 	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Left, tzLabel.Width(col).Render(checkboxLabel(m)), "  ", tzVal) + "\n")
 
 	return b.String()
