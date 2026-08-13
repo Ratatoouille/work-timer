@@ -461,7 +461,7 @@ func (m Model) renderTimerRow() string {
 	} else if m.startTime.Value() != "" {
 		start = paramValueStyle.Render(m.startTime.Value())
 		if m.cursor == FieldStartTime {
-			start = paramValueStyle.Underline(true).Foreground(colorAccent).Render(m.startTime.Value())
+			start = paramValueStyle.Underline(true).Foreground(colorError).Render(m.startTime.Value())
 		}
 	} else {
 		start = statusBarStyle.Render("—:—")
@@ -516,7 +516,7 @@ func (m Model) renderBreakRow(idx, baseIndex int, br Break) string {
 	if from != "" {
 		st := breakTimeStyle
 		if focusedFrom {
-			st = st.Bold(true).Underline(true)
+			st = st.Bold(true).Underline(true).Foreground(colorError)
 		}
 		dispFrom = st.Render(from)
 	} else if focusedFrom {
@@ -526,7 +526,7 @@ func (m Model) renderBreakRow(idx, baseIndex int, br Break) string {
 	if to != "" {
 		st := breakTimeStyle
 		if focusedTo {
-			st = st.Bold(true).Underline(true)
+			st = st.Bold(true).Underline(true).Foreground(colorError)
 		}
 		dispTo = st.Render(to)
 	} else if focusedTo {
@@ -605,7 +605,7 @@ func (m Model) renderPairAt(label, value string, col int) string {
 func (m Model) valueLabelStyle(focused bool) lipgloss.Style {
 	s := paramLabelStyle
 	if focused {
-		s = s.Bold(true).Foreground(colorAccent)
+		s = s.Bold(true).Foreground(colorError)
 	}
 	return s
 }
