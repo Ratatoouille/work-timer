@@ -333,10 +333,10 @@ func (m Model) updateNormalMode(msg tea.KeyMsg) (Model, tea.Cmd) {
 		m.mode = ModeInsert
 		m.focusCurrent()
 
-	case "j", "down":
+	case "j", "down", "right":
 		m.moveCursor(1)
 
-	case "k", "up":
+	case "k", "up", "left":
 		m.moveCursor(-1)
 
 	case "alt+right":
