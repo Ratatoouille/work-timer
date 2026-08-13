@@ -89,9 +89,7 @@ func initStyles(cfg Config) {
 
 	modeNormalStyle = lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("0")).
-		Background(colorSuccess).
-		Padding(0, 1)
+		Foreground(colorSuccess)
 
 	modeInsertStyle = lipgloss.NewStyle().
 		Bold(true).
@@ -350,7 +348,8 @@ func (m Model) renderHero() string {
 
 	bar := m.renderEmptyProgressBar()
 	if ok {
-		bar = m.renderProgressBar(percent)
+		// Подпись шкалы: Начало ... Окончание по краям прогресс-бара.
+		bar = m.renderProgressTimeline(percent)
 	}
 
 	return "\n" + heroLabelStyle.Render(m.locale.RemainingLabel+":") + "\n\n" +
@@ -783,11 +782,16 @@ func utcOffsetLabel(tz string) string {
 }
 
 // renderProgressBar рисует текстовый прогресс-бар с процентом на той же строке.
-func (m Model) renderProgressBar(percent float64) string {
-	barWidth := min(max(m.containerWidth()-14, 20), 50)
+// avail (если >0) ограничивает ширину полосы; иначе считается из контейнера.
+func (m Model) renderProgressBar(percent float64, avail int) string {
+	barWidth := min(max(m.containerWidth()-14, 14), 50)
+	if avail > 0 {
+		barWidth = min(avail, barWidth)
+	}
 	if barWidth > m.dividerWidth() {
 		barWidth = m.dividerWidth()
 	}
+	barWidth = max(barWidth, 4)
 	filled := int(percent * float64(barWidth))
 	filled = min(filled, barWidth)
 	filled = max(filled, 0)
@@ -796,8 +800,39 @@ func (m Model) renderProgressBar(percent float64) string {
 	return lipgloss.NewStyle().Foreground(colorAccent).Render(bar) + " " + statusBarStyle.Render(pct)
 }
 
+// renderProgressTimeline — прогресс-бар как шкала рабочего дня: слева время
+// начала, справа время окончания, под ним заполненная полоса и проценты.
+func (m Model) renderProgressTimeline(percent float64) string {
+	startStr := "—:—"
+	if s := m.startTime.Value(); s != "" {
+		startStr = s
+	}
+	endStr := m.formatResultEndPlain()
+
+	// Реальная доступная ширина с учётом времени начала/окончания по краям.
+	avail := max(m.dividerWidth()-lipgloss.Width(startStr)-lipgloss.Width(endStr)-4, 10)
+	bar := m.renderProgressBar(percent, avail)
+
+	return lipgloss.JoinHorizontal(lipgloss.Left,
+		statusBarStyle.Render(startStr),
+		"  ",
+		bar,
+		"  ",
+		statusBarStyle.Render(endStr),
+	)
+}
+
+// formatResultEndPlain возвращает только время окончания без timezone-суффикса.
+func (m Model) formatResultEndPlain() string {
+	endStr := strings.TrimSpace(m.result)
+	if endStr == "" {
+		return "—:—"
+	}
+	return strings.SplitN(endStr, " ", 2)[0]
+}
+
 func (m Model) renderEmptyProgressBar() string {
-	barWidth := min(max(m.containerWidth()-14, 20), 50)
+	barWidth := min(max(m.containerWidth()-14, 14), 50)
 	if barWidth > m.dividerWidth() {
 		barWidth = m.dividerWidth()
 	}
