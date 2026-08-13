@@ -894,12 +894,21 @@ func (m *Model) addBreak() {
 func (m *Model) deleteCurrentBreak() {
 	if idx, ok := m.currentBreakIndex(); ok && idx < len(m.breaks) {
 		m.breaks = append(m.breaks[:idx], m.breaks[idx+1:]...)
-
-		if m.cursor > FieldAddTZ {
-			m.cursor--
-		}
-
 		m.isDirty = true
+	}
+
+	// Курсор мог указывать на удалённые поля перерыва (два поля на перерыв),
+	// поэтому приводим его к корректному диапазону видимых полей.
+	maxField := FieldAddTZ
+	if len(m.breaks) > 0 {
+		maxField = FieldBreaksStart + len(m.breaks)*2 - 1
+	}
+	if m.cursor > maxField {
+		m.cursor = maxField
+	}
+	if m.cursor > FieldAddTZ {
+		m.blurAll()
+		m.focusCurrent()
 	}
 }
 
