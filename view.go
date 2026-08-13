@@ -1114,37 +1114,47 @@ func (m Model) renderHistory() string {
 
 	if len(m.historyEntries) == 0 {
 		b.WriteString("\n  " + statusBarStyle.Render(m.locale.HistoryEmpty) + "\n\n")
-	} else {
-		// Заголовок таблицы
-		header := fmt.Sprintf("%-12s %-6s %-8s %-10s %-6s",
-			m.locale.HistoryColDate, m.locale.HistoryColStart,
-			m.locale.HistoryColEnd, m.locale.HistoryColBreak,
-			m.locale.HistoryColSaved)
-		b.WriteString(statusBarStyle.Render(header) + "\n")
-
-		divW := max(m.dividerWidth(), 50)
-		b.WriteString(sectionDividerStyle.Render(strings.Repeat("─", divW)) + "\n")
-
-		for i, e := range m.historyEntries {
-			breaksInfo := e.BreaksDur
-			if e.Breaks > 0 {
-				breaksInfo = fmt.Sprintf("%s (%d)", e.BreaksDur, e.Breaks)
-			}
-			line := fmt.Sprintf("%-12s %-6s %-8s %-10s %-6s",
-				e.Date, e.StartTime, e.EndTime, breaksInfo, e.SavedAt)
-			if i == m.historyCursor {
-				b.WriteString(fileListItemActiveStyle.Render("▸ "+line) + "\n")
-			} else {
-				b.WriteString(fileListItemStyle.Render("  "+line) + "\n")
-			}
-		}
-		b.WriteString("\n")
+		b.WriteString(m.historyFooter())
+		return promptStyle.Render(b.String())
 	}
 
-	divider := sectionDividerStyle.Render(strings.Repeat("─", 40))
-	b.WriteString(divider + "\n\n")
-	b.WriteString(statusBarStyle.Render(m.locale.HistoryHint))
+	// Список записей в том же стиле, что и список файлов: маркер "▸" у
+	// выбранной записи, фиксированные колонки.
+	for i, e := range m.historyEntries {
+		startStr := e.StartTime
+		if startStr == "" {
+			startStr = "—:—"
+		}
+		endStr := e.EndTime
+		if endStr == "" {
+			endStr = "—:—"
+		}
+		breaksInfo := e.BreaksDur
+		if e.Breaks > 0 {
+			breaksInfo = fmt.Sprintf("%d × %s", e.Breaks, e.BreaksDur)
+		}
+		line := fmt.Sprintf("%-12s  %-6s  %-8s  %-12s",
+			e.Date, startStr, endStr, breaksInfo)
+		if i == m.historyCursor {
+			b.WriteString(fileListItemActiveStyle.Render("▸ "+line) + "\n")
+		} else {
+			b.WriteString(fileListItemStyle.Render("  "+line) + "\n")
+		}
+	}
+
+	b.WriteString("\n")
+	b.WriteString(m.historyFooter())
+
 	return promptStyle.Render(b.String())
+}
+
+// historyFooter — двухстрочный footer в стиле file picker.
+func (m Model) historyFooter() string {
+	fk := func(s string) string { return controlKeyStyle.Render(s) }
+	fd := func(s string) string { return statusBarStyle.Render(s) }
+	return "\n" +
+		fk("j/k") + " " + fd(m.locale.CtrlNav) + "   " + fk("Enter") + " " + fd(m.locale.CtrlOpen) + "\n" +
+		fk("Esc") + " " + fd(m.locale.CtrlCancel) + "\n"
 }
 
 func (m Model) renderHelp() string {
