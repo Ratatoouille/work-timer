@@ -39,6 +39,7 @@ func TestLocaleAllFieldsNonEmpty(t *testing.T) {
 			"FieldStart":           loc.FieldStart,
 			"FieldEnd":             loc.FieldEnd,
 			"RemainingLabel":       loc.RemainingLabel,
+			"HeroDoneLabel":        loc.HeroDoneLabel,
 			"StateRunning":         loc.StateRunning,
 			"StatePaused":          loc.StatePaused,
 			"StateDone":            loc.StateDone,
