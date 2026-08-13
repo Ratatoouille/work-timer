@@ -10,10 +10,12 @@ type Locale struct {
 	// --- Секции ---
 	SectionMain   string
 	SectionBreaks string
+	SectionParams string
 	SectionResult string
 
 	// --- Поля ввода ---
 	FieldStart         string
+	FieldEnd           string
 	FieldMode1Label    string
 	FieldRemainingTime string
 	FieldMode2Label    string
@@ -21,6 +23,28 @@ type Locale struct {
 	FieldPlan          string
 	CheckboxAddTZ      string // когда timezone не задан
 	CheckboxShowIn     string // "Показать в %s"
+
+	// --- Большой блок "оставшееся время" ---
+	RemainingLabel string
+
+	// --- Статус таймера ---
+	StateRunning  string
+	StatePaused   string
+	StateDone     string
+	StateOvertime string
+
+	// --- Параметры: режим ---
+	StatMode    string
+	StatMode1   string
+	StatMode2   string
+	StatModeOff string
+	StatOn      string
+	StatOff     string
+
+	// --- Перерывы ---
+	BreakWord      string
+	DurFormatHours string // "%dч %02dм" — часы и минуты
+	DurFormatMins  string // "%dм" — только минуты
 
 	// --- Перерывы ---
 	BreakLeft  string // "Перерыв %d — ушёл:"
@@ -108,9 +132,11 @@ var localeRU = Locale{
 
 	SectionMain:   "Основные параметры",
 	SectionBreaks: "Перерывы",
+	SectionParams: "Параметры",
 	SectionResult: "Результат",
 
 	FieldStart:         "Начало",
+	FieldEnd:           "Окончание",
 	FieldMode1Label:    "режим 1: оставшееся время",
 	FieldRemainingTime: "Оставшееся время",
 	FieldMode2Label:    "режим 2: отработано / план",
@@ -119,8 +145,26 @@ var localeRU = Locale{
 	CheckboxAddTZ:      "Конвертировать timezone",
 	CheckboxShowIn:     "Показать в %s",
 
-	BreakLeft:  "Перерыв %d — ушел",
-	BreakRight: "Перерыв %d — вернулся",
+	RemainingLabel: "ОСТАЛОСЬ",
+
+	StateRunning:  "РАБОТАЕМ",
+	StatePaused:   "ПЕРЕРЫВ",
+	StateDone:     "ГОТОВО",
+	StateOvertime: "ПЕРЕРАБОТКА",
+
+	StatMode:    "Режим",
+	StatMode1:   "Режим 1",
+	StatMode2:   "Режим 2",
+	StatModeOff: "Режим",
+	StatOn:      "ВКЛ",
+	StatOff:     "ВЫКЛ",
+
+	BreakWord:      "Перерыв",
+	DurFormatHours: "%dч %02dм",
+	DurFormatMins:  "%dм",
+
+	BreakLeft:  "Перерыв %d — начало",
+	BreakRight: "Перерыв %d — конец",
 
 	ResultLabel: "Время окончания",
 	Remaining:   "ост.",
@@ -237,9 +281,11 @@ var localeEN = Locale{
 
 	SectionMain:   "Main parameters",
 	SectionBreaks: "Breaks",
+	SectionParams: "Options",
 	SectionResult: "Result",
 
 	FieldStart:         "Start",
+	FieldEnd:           "End",
 	FieldMode1Label:    "mode 1: remaining time",
 	FieldRemainingTime: "Remaining time",
 	FieldMode2Label:    "mode 2: worked / plan",
@@ -248,8 +294,26 @@ var localeEN = Locale{
 	CheckboxAddTZ:      "Convert timezone",
 	CheckboxShowIn:     "Show in %s",
 
-	BreakLeft:  "Break %d — left",
-	BreakRight: "Break %d — returned",
+	RemainingLabel: "REMAINING",
+
+	StateRunning:  "RUNNING",
+	StatePaused:   "PAUSED",
+	StateDone:     "DONE",
+	StateOvertime: "OVERTIME",
+
+	StatMode:    "Mode",
+	StatMode1:   "Mode 1",
+	StatMode2:   "Mode 2",
+	StatModeOff: "Mode",
+	StatOn:      "ON",
+	StatOff:     "OFF",
+
+	BreakWord:      "Break",
+	DurFormatHours: "%dh %02dm",
+	DurFormatMins:  "%dm",
+
+	BreakLeft:  "Break %d — start",
+	BreakRight: "Break %d — end",
 
 	ResultLabel: "End time",
 	Remaining:   "left",
