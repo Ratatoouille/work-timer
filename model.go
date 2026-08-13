@@ -854,19 +854,19 @@ func (m *Model) moveCursor(delta int) {
 }
 
 // visualOrder возвращает порядок полей при навигации, соответствующий
-// визуальному расположению на экране: Start → перерывы → параметры.
-// Базовые поля: 0=Start, 1=WorkTime, 2=Worked, 3=Plan, 4=AddTZ.
+// визуальному расположению на экране: Start → перерывы → чекбокс TZ.
+// Base: 0=Start, 2n break fields, then 4=AddTZ (последним).
 func (m Model) visualOrder() []int {
 	n := len(m.breaks)
-	order := make([]int, 0, FieldBreaksStart+n*2)
+	order := make([]int, 0, FieldAddTZ+1)
 	// Start (в строке "Начало / Окончание").
 	order = append(order, FieldStartTime)
 	// Перерывы (секция между временем и параметрами).
 	for i := 0; i < n; i++ {
 		order = append(order, FieldBreaksStart+i*2, FieldBreaksStart+i*2+1)
 	}
-	// Параметры: оставшееся время, отработано, план, чекбокс TZ.
-	order = append(order, FieldWorkTime, FieldWorked, FieldPlan, FieldAddTZ)
+	// Параметры: только видимый чекбокс TZ.
+	order = append(order, FieldAddTZ)
 	return order
 }
 
