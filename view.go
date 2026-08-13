@@ -505,10 +505,13 @@ func (m Model) renderParams() string {
 	b.WriteString(m.renderValueFieldAt(FieldPlan, m.locale.FieldPlan, m.plan, true, col) + "\n")
 
 	tzVal := offStyle.Render("[  ]")
-	if m.addTZ {
+	if m.addTZ && m.cursor == FieldAddTZ {
+		tzVal = paramValueStyle.Underline(true).Foreground(colorAccent).Render("[x]")
+	} else if m.addTZ {
 		tzVal = paramValueStyle.Render("[x]")
 	}
-	b.WriteString(m.renderPairAt(checkboxLabel(m), tzVal, col) + "\n")
+	tzLabel := m.valueLabelStyle(m.cursor == FieldAddTZ)
+	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Left, tzLabel.Width(col).Render(checkboxLabel(m)), "  ", tzVal) + "\n")
 
 	return b.String()
 }
@@ -537,23 +540,36 @@ func (m Model) renderPairAt(label, value string, col int) string {
 
 // renderValueFieldAt рисует значение поля (без бокса и символа ">").
 // В Insert-режиме на активном поле показывает настоящий textinput для ввода.
+func (m Model) valueLabelStyle(focused bool) lipgloss.Style {
+	s := paramLabelStyle
+	if focused {
+		s = s.Bold(true).Foreground(colorAccent)
+	}
+	return s
+}
+
 func (m Model) renderValueFieldAt(index int, label string, input textinput.Model, isDuration bool, col int) string {
 	focused := m.cursor == index
 	value := input.Value()
+	labelStyle := m.valueLabelStyle(focused)
 
 	if m.mode == ModeInsert && focused {
 		return lipgloss.JoinHorizontal(lipgloss.Left,
-			paramLabelStyle.Width(col).Render(label),
+			labelStyle.Width(col).Render(label),
 			"  ",
 			fieldActiveStyle.Render(input.View()),
 		)
 	}
 
 	if value == "" {
+		val := offStyle.Render("—")
+		if focused {
+			val = offStyle.Render("▍" + m.locale.PlaceholderTime)
+		}
 		return lipgloss.JoinHorizontal(lipgloss.Left,
-			paramLabelStyle.Width(col).Render(label),
+			labelStyle.Width(col).Render(label),
 			"  ",
-			offStyle.Render("—"),
+			val,
 		)
 	}
 
@@ -562,15 +578,15 @@ func (m Model) renderValueFieldAt(index int, label string, input textinput.Model
 		invalid = isInvalidDurationValue(value)
 	}
 	valStyle := paramValueStyle
+	if focused {
+		valStyle = paramValueStyle.Underline(true).Foreground(colorAccent)
+	}
 	if invalid {
 		valStyle = statusErrorStyle
 	}
-	if focused {
-		valStyle = valStyle.Underline(true)
-	}
 
 	return lipgloss.JoinHorizontal(lipgloss.Left,
-		paramLabelStyle.Width(col).Render(label),
+		labelStyle.Width(col).Render(label),
 		"  ",
 		valStyle.Render(value),
 	)
