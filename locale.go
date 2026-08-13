@@ -247,6 +247,11 @@ Normal-режим:
   s            — сохранить
   o            — открыть список файлов
 
+Режимы:
+  Режим 1      — заполни «Оставшееся время» (старт + перерывы = конец)
+  Режим 2      — заполни «Отработано» и «План», очисти «Оставшееся время»
+  x            — очистить текущее поле
+
 Insert-режим:
   ввод текста
   Esc          — обратно в Normal
@@ -395,6 +400,11 @@ Normal mode:
   y             — copy result
   s             — save
   o             — open file list
+
+Modes:
+  Mode 1       — fill "Remaining time" (start + breaks = end)
+  Mode 2       — fill "Worked" and "Plan", clear "Remaining time"
+  x            — clear current field
 
 Insert mode:
   type text
