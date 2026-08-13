@@ -9,6 +9,7 @@ import (
 
 	"image/color"
 
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
@@ -568,6 +569,16 @@ func (m Model) renderParams() string {
 	}
 	b.WriteString(m.renderPairAt(m.locale.StatMode, modeStr, col) + "\n")
 
+	// Поля ввода для активного режима (это входные данные, а не дубликат
+	// runtime state). Режим 1 — "оставшееся время"; режим 2 — отработано/план.
+	switch {
+	case m.mode2Active():
+		b.WriteString(m.renderValueFieldAt(FieldWorked, m.locale.FieldWorked, m.worked, true, col) + "\n")
+		b.WriteString(m.renderValueFieldAt(FieldPlan, m.locale.FieldPlan, m.plan, true, col) + "\n")
+	case m.mode1Active():
+		b.WriteString(m.renderValueFieldAt(FieldWorkTime, m.locale.FieldRemainingTime, m.workTime, false, col) + "\n")
+	}
+
 	tzVal := offStyle.Render("Нет")
 	if m.addTZ {
 		tzVal = statusSuccessStyle.Render("Да")
@@ -608,8 +619,53 @@ func (m Model) renderPairAt(label, value string, col int) string {
 	)
 }
 
-// renderValueFieldAt рисует значение поля (без бокса и символа ">").
-// В Insert-режиме на активном поле показывает настоящий textinput для ввода.
+// renderValueFieldAt рисует поле ввода. В Insert-режиме на активном поле
+// показывает настоящий textinput для ввода, иначе — значение с фокусной
+// подсветкой.
+func (m Model) renderValueFieldAt(index int, label string, input textinput.Model, isDuration bool, col int) string {
+	focused := m.cursor == index
+	value := input.Value()
+	labelStyle := m.valueLabelStyle(focused)
+
+	if m.mode == ModeInsert && focused {
+		return lipgloss.JoinHorizontal(lipgloss.Left,
+			labelStyle.Width(col).Render(label),
+			"  ",
+			fieldActiveStyle.Render(input.View()),
+		)
+	}
+
+	if value == "" {
+		val := offStyle.Render("—")
+		if focused {
+			val = offStyle.Render("▍" + m.locale.PlaceholderTime)
+		}
+		return lipgloss.JoinHorizontal(lipgloss.Left,
+			labelStyle.Width(col).Render(label),
+			"  ",
+			val,
+		)
+	}
+
+	invalid := isInvalidTimeValue(value)
+	if isDuration {
+		invalid = isInvalidDurationValue(value)
+	}
+	valStyle := paramValueStyle
+	if focused {
+		valStyle = paramValueStyle.Underline(true).Foreground(colorError)
+	}
+	if invalid {
+		valStyle = statusErrorStyle
+	}
+
+	return lipgloss.JoinHorizontal(lipgloss.Left,
+		labelStyle.Width(col).Render(label),
+		"  ",
+		valStyle.Render(value),
+	)
+}
+
 func (m Model) valueLabelStyle(focused bool) lipgloss.Style {
 	s := paramLabelStyle
 	if focused {

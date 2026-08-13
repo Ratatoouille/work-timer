@@ -129,11 +129,10 @@ func TestModelMoveCursor(t *testing.T) {
 		t.Errorf("Initial cursor = %v, want 0", m.cursor)
 	}
 
-	// Навигация идёт только по видимым полям: Start → чекбокс TZ (4).
-	// Скрытые поля WorkTime/Worked/Plan не посещаются.
+	// Навигация идёт по видимым полям: Start → WorkTime → Worked → Plan → TZ.
 	m.moveCursor(1)
-	if m.cursor != FieldAddTZ {
-		t.Errorf("After moveCursor(1) = %v, want %v", m.cursor, FieldAddTZ)
+	if m.cursor != FieldWorkTime {
+		t.Errorf("After moveCursor(1) = %v, want %v", m.cursor, FieldWorkTime)
 	}
 
 	m.moveCursor(-1)
