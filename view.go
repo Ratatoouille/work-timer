@@ -20,13 +20,11 @@ var (
 	colorMuted   = lipgloss.Color("8")
 	colorSuccess = lipgloss.Color("10")
 	colorError   = lipgloss.Color("9")
-	colorBreak   color.Color
 	colorResult  color.Color
 	colorWarn    color.Color
 
 	fieldBoxStyle      lipgloss.Style
 	fieldActiveStyle   lipgloss.Style
-	fieldErrorStyle    lipgloss.Style
 	containerStyle     lipgloss.Style
 	headerStyle        lipgloss.Style
 	modeNormalStyle    lipgloss.Style
@@ -72,17 +70,12 @@ var (
 func initStyles(cfg Config) {
 	colorAccent = lipgloss.Color(cfg.UI.Colors.Accent)
 	colorResult = lipgloss.Color(cfg.UI.Colors.Result)
-	colorBreak = lipgloss.Color(cfg.UI.Colors.Break)
 	colorWarn = lipgloss.Color(cfg.UI.Colors.Warn)
 
 	fieldBoxStyle = lipgloss.NewStyle().Padding(0, 1)
 	fieldActiveStyle = fieldBoxStyle.
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(colorAccent).
-		Padding(0, 1)
-	fieldErrorStyle = fieldBoxStyle.
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(colorError).
 		Padding(0, 1)
 
 	containerStyle = lipgloss.NewStyle().
