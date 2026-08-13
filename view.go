@@ -496,25 +496,36 @@ func (m Model) renderBreakRow(idx, baseIndex int, br Break) string {
 	from := br.from.Value()
 	to := br.to.Value()
 
-	if from == "" && to == "" {
-		return "  " + offStyle.Render(fmt.Sprintf("%s %d  —", m.locale.BreakWord, idx+1))
+	focusedFrom := m.cursor == baseIndex
+	focusedTo := m.cursor == baseIndex+1
+
+	// В Insert-режиме фокусируемое поле перерыва показываем как textinput.
+	if m.mode == ModeInsert && (focusedFrom || focusedTo) {
+		if focusedFrom {
+			return "  " + fieldActiveStyle.Render(br.from.View()) + "  " + offStyle.Render("—:—")
+		}
+		return "  " + offStyle.Render("—:—") + "  " + fieldActiveStyle.Render(br.to.View())
 	}
 
 	dispFrom := offStyle.Render("—:—")
 	if from != "" {
 		st := breakTimeStyle
-		if m.cursor == baseIndex {
+		if focusedFrom {
 			st = st.Bold(true).Underline(true)
 		}
 		dispFrom = st.Render(from)
+	} else if focusedFrom {
+		dispFrom = offStyle.Render("▍" + m.locale.PlaceholderTime)
 	}
 	dispTo := offStyle.Render("—:—")
 	if to != "" {
 		st := breakTimeStyle
-		if m.cursor == baseIndex+1 {
+		if focusedTo {
 			st = st.Bold(true).Underline(true)
 		}
 		dispTo = st.Render(to)
+	} else if focusedTo {
+		dispTo = offStyle.Render("▍" + m.locale.PlaceholderTime)
 	}
 
 	sep := 6
