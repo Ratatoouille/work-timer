@@ -88,7 +88,11 @@ func TestLocaleAllFieldsNonEmpty(t *testing.T) {
 			"ErrTimezoneNotSet":    loc.ErrTimezoneNotSet,
 			"PlaceholderFile":      loc.PlaceholderFile,
 			"PlaceholderTime":      loc.PlaceholderTime,
-			"HelpText":             loc.HelpText,
+			"HelpTitle":            loc.HelpTitle,
+			"HelpNormal":           loc.HelpNormal,
+			"HowModes":             loc.HowModes,
+			"CtrlAddBreak":         loc.CtrlAddBreak,
+			"HelpMode1Desc":        loc.HelpMode1Desc,
 		}
 
 		for field, value := range fields {

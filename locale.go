@@ -131,7 +131,28 @@ type Locale struct {
 	// --- Плейсхолдеры полей ввода ---
 	PlaceholderFile string
 	PlaceholderTime string
-	HelpText        string
+
+	// --- Справка (структурированная, в стиле остальных экранов) ---
+	HelpTitle    string
+	HelpNormal   string // "Управление"
+	HelpModes    string // "Режимы"
+	HelpFileList string // "Выбор файла"
+	HelpGeneral  string // "Общее"
+	HowModes     string // пояснение про выбор режима
+	HelpConfig   string // "Конфиг"
+	HelpFolder   string // "Рабочая папка"
+
+	// Описания действий для справки
+	CtrlAddBreak  string
+	CtrlPreset    string
+	CtrlDelBreak  string
+	CtrlHistory   string
+	CtrlCheckbox  string
+	CtrlCopy      string
+	CtrlClear     string
+	CtrlSelect    string
+	HelpMode1Desc string
+	HelpMode2Desc string
 }
 
 var localeRU = Locale{
@@ -251,50 +272,25 @@ var localeRU = Locale{
 	PlaceholderFile: "имя_файла.json",
 	PlaceholderTime: "чч:мм",
 
-	HelpText: `🛠  Комбинации клавиш
+	HelpTitle:    "Комбинации клавиш",
+	HelpNormal:   "Управление",
+	HelpModes:    "Режимы",
+	HelpFileList: "Выбор файла",
+	HelpGeneral:  "Общее",
+	HowModes:     "Режим 1 — заполни «Оставшееся время»; Режим 2 — «Отработано» и «План».",
+	HelpConfig:   "Конфиг",
+	HelpFolder:   "Рабочая папка",
 
-Normal-режим:
-  j/k или ↑/↓  — перемещение
-  i            — Insert режим
-  a            — добавить перерыв
-  p            — добавить перерыв из шаблона
-  d            — удалить перерыв
-  H            — история рабочих дней
-  space        — переключить чекбокс
-  y            — скопировать результат
-  s            — сохранить
-  o            — открыть список файлов
-
-Режимы:
-  Режим 1      — заполни «Оставшееся время» (старт + перерывы = конец)
-  Режим 2      — заполни «Отработано» и «План», очисти «Оставшееся время»
-  x            — очистить текущее поле
-
-Insert-режим:
-  ввод текста
-  Esc          — обратно в Normal
-
-Выбор файла:
-  j/k или ↑/↓  — навигация по списку
-  /             — поиск файлов
-  Enter        — загрузить выбранный файл
-  d            — удалить файл
-  r            — переименовать файл
-  n            — создать новый файл
-  Esc          — отмена
-
-Общие:
-  ?            — показать/скрыть справку
-  q            — закрыть справку / выход
-  Ctrl+S       — быстрое сохранение
-  Ctrl+O       — открыть список файлов
-
-Конфиг: %s
-
-Формат времени: чч:мм
-
-Рабочая папка: %s
-`,
+	CtrlAddBreak:  "добавить перерыв",
+	CtrlPreset:    "перерыв из шаблона",
+	CtrlDelBreak:  "удалить перерыв",
+	CtrlHistory:   "история рабочих дней",
+	CtrlCheckbox:  "переключить чекбокс",
+	CtrlCopy:      "скопировать результат",
+	CtrlClear:     "очистить текущее поле",
+	CtrlSelect:    "выбрать",
+	HelpMode1Desc: "заполни «Оставшееся время»",
+	HelpMode2Desc: "заполни «Отработано» и «План»",
 }
 
 var localeEN = Locale{
@@ -414,50 +410,25 @@ var localeEN = Locale{
 	PlaceholderFile: "filename.json",
 	PlaceholderTime: "hh:mm",
 
-	HelpText: `🛠  Key bindings
+	HelpTitle:    "Key bindings",
+	HelpNormal:   "Controls",
+	HelpModes:    "Modes",
+	HelpFileList: "File selection",
+	HelpGeneral:  "General",
+	HowModes:     "Mode 1 — fill \"Remaining time\"; Mode 2 — \"Worked\" and \"Plan\".",
+	HelpConfig:   "Config",
+	HelpFolder:   "Work folder",
 
-Normal mode:
-  j/k or ↑/↓   — navigate
-  i             — Insert mode
-  a             — add break
-  p             — add break from preset
-  d             — delete break
-  H             — work day history
-  space         — toggle checkbox
-  y             — copy result
-  s             — save
-  o             — open file list
-
-Modes:
-  Mode 1       — fill "Remaining time" (start + breaks = end)
-  Mode 2       — fill "Worked" and "Plan", clear "Remaining time"
-  x            — clear current field
-
-Insert mode:
-  type text
-  Esc           — back to Normal
-
-File selection:
-  j/k or ↑/↓   — navigate list
-  /             — search files
-  Enter         — load selected file
-  d             — delete file
-  r             — rename file
-  n             — create new file
-  Esc           — cancel
-
-General:
-  ?             — show/hide help
-  q             — close help / quit
-  Ctrl+S        — quick save
-  Ctrl+O        — open file list
-
-Config: %s
-
-Time format: HH:MM
-
-Work folder: %s
-`,
+	CtrlAddBreak:  "add break",
+	CtrlPreset:    "break from preset",
+	CtrlDelBreak:  "delete break",
+	CtrlHistory:   "work day history",
+	CtrlCheckbox:  "toggle checkbox",
+	CtrlCopy:      "copy result",
+	CtrlClear:     "clear current field",
+	CtrlSelect:    "select",
+	HelpMode1Desc: "fill \"Remaining time\"",
+	HelpMode2Desc: "fill \"Worked\" and \"Plan\"",
 }
 
 // LoadLocale возвращает локаль по коду языка. Неизвестный код → русский.
