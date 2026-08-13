@@ -9,7 +9,6 @@ import (
 
 	"image/color"
 
-	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
@@ -23,18 +22,17 @@ var (
 	colorResult  color.Color
 	colorWarn    color.Color
 
-	fieldBoxStyle      lipgloss.Style
-	fieldActiveStyle   lipgloss.Style
-	containerStyle     lipgloss.Style
-	headerStyle        lipgloss.Style
-	modeNormalStyle    lipgloss.Style
-	modeInsertStyle    lipgloss.Style
-	headerDividerStyle lipgloss.Style
-	statusBarStyle     lipgloss.Style
-	fileNameStyle      lipgloss.Style
-	dirtyDotStyle      lipgloss.Style
-	statusDotStyle     lipgloss.Style
-	clockStyle         lipgloss.Style
+	fieldBoxStyle    lipgloss.Style
+	fieldActiveStyle lipgloss.Style
+	containerStyle   lipgloss.Style
+	headerStyle      lipgloss.Style
+	modeNormalStyle  lipgloss.Style
+	modeInsertStyle  lipgloss.Style
+	statusBarStyle   lipgloss.Style
+	fileNameStyle    lipgloss.Style
+	dirtyDotStyle    lipgloss.Style
+	statusDotStyle   lipgloss.Style
+	clockStyle       lipgloss.Style
 
 	sectionBreakHeaderStyle lipgloss.Style
 	sectionDividerStyle     lipgloss.Style
@@ -97,7 +95,6 @@ func initStyles(cfg Config) {
 		Background(colorWarn).
 		Padding(0, 1)
 
-	headerDividerStyle = lipgloss.NewStyle().Foreground(colorMuted)
 	statusBarStyle = lipgloss.NewStyle().Foreground(colorMuted)
 	clockStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15"))
 
@@ -253,9 +250,9 @@ func (m Model) renderMain() string {
 	b.WriteString(m.renderTimerRow())
 	b.WriteString(m.renderBreaks())
 	b.WriteString(m.renderParams())
-	b.WriteString(m.renderStatusMessage())
 	b.WriteString(m.renderResult())
 	b.WriteString(m.renderControls())
+	b.WriteString(m.renderStatusMessage())
 	return b.String()
 }
 
@@ -266,8 +263,6 @@ func (m Model) renderHeader() string {
 		modeStyle = modeInsertStyle
 		modeStr = m.locale.ModeInsert
 	}
-
-	div := headerDividerStyle.Render("  │  ")
 
 	var filePart string
 	if m.saveFile != "" {
@@ -285,9 +280,16 @@ func (m Model) renderHeader() string {
 		clock = clockStyle.Render(m.currentTime.Format("15:04"))
 	}
 
-	parts := []string{headerStyle.Render("◉ WORK TIMER"), " ", modeStyle.Render(modeStr), div, filePart}
+	var parts []string
+	parts = append(parts,
+		headerStyle.Render("◉ WORK TIMER"),
+		"  ",
+		modeStyle.Render(modeStr),
+		"  ",
+		filePart,
+	)
 	if clock != "" {
-		parts = append(parts, div, clock)
+		parts = append(parts, "  ", clock)
 	}
 
 	return lipgloss.JoinHorizontal(lipgloss.Left, parts...) + "\n"
@@ -337,24 +339,28 @@ func (m Model) hasTimerInput() bool {
 // "ОСТАЛОСЬ 09:00" рядом с "ГОТОВО".
 func (m Model) renderHero() string {
 	percent, _, _, ok := m.progressInfo()
+	done := m.runtimeState() == stateDone
 
 	value := m.heroRemaining()
 	badge := m.statusBadge()
-
 	line := value
 	if badge != "" {
 		line = lipgloss.JoinHorizontal(lipgloss.Center, value, badge)
 	}
 
-	bar := m.renderEmptyProgressBar()
-	if ok {
-		// Подпись шкалы: Начало ... Окончание по краям прогресс-бара.
-		bar = m.renderProgressTimeline(percent)
+	label := heroLabelStyle.Render(m.locale.RemainingLabel + ":")
+	if done {
+		label = statusSuccessStyle.Bold(true).Render(m.locale.HeroDoneLabel)
 	}
 
-	return "\n" + heroLabelStyle.Render(m.locale.RemainingLabel+":") + "\n\n" +
+	var progress string
+	if ok {
+		progress = m.renderProgressTimeline(percent)
+	}
+
+	return "\n" + label + "\n" +
 		line + "\n\n" +
-		bar + "\n\n"
+		progress + "\n\n"
 }
 
 // heroRemaining возвращает главное значение оставшегося времени.
@@ -474,7 +480,7 @@ func (m Model) renderTimerRow() string {
 		end,
 	)
 
-	return row + "\n\n"
+	return row + "\n"
 }
 
 // renderBreaks — компактные timeline-строки перерывов.
@@ -548,13 +554,7 @@ func (m Model) renderParams() string {
 	var b strings.Builder
 	b.WriteString(m.renderSectionHeader(m.locale.SectionParams, sectionBreakHeaderStyle))
 
-	col := m.labelCol(
-		m.locale.StatMode,
-		m.locale.FieldRemainingTime,
-		m.locale.FieldWorked,
-		m.locale.FieldPlan,
-		checkboxLabel(m),
-	)
+	col := m.labelCol(m.locale.StatMode, checkboxLabel(m))
 
 	// Режим: показываем номер и описание как состояние, а не "кнопку".
 	var modeStr string
@@ -567,24 +567,6 @@ func (m Model) renderParams() string {
 		modeStr = offStyle.Render("—")
 	}
 	b.WriteString(m.renderPairAt(m.locale.StatMode, modeStr, col) + "\n")
-
-	// Поля редактируются независимо от активного режима (навигация и ввод не
-	// должны ломаться), но неактивная группа визуально приглушается.
-	timeField := m.renderValueFieldAt(FieldWorkTime, m.locale.FieldRemainingTime, m.workTime, false, col)
-	workedField := m.renderValueFieldAt(FieldWorked, m.locale.FieldWorked, m.worked, true, col)
-	planField := m.renderValueFieldAt(FieldPlan, m.locale.FieldPlan, m.plan, true, col)
-
-	if m.mode2Active() {
-		timeField = offStyle.Render(timeField)
-	}
-	if m.mode1Active() {
-		workedField = offStyle.Render(workedField)
-		planField = offStyle.Render(planField)
-	}
-
-	b.WriteString(timeField + "\n")
-	b.WriteString(workedField + "\n")
-	b.WriteString(planField + "\n")
 
 	tzVal := offStyle.Render("Нет")
 	if m.addTZ {
@@ -626,50 +608,6 @@ func (m Model) valueLabelStyle(focused bool) lipgloss.Style {
 		s = s.Bold(true).Foreground(colorAccent)
 	}
 	return s
-}
-
-func (m Model) renderValueFieldAt(index int, label string, input textinput.Model, isDuration bool, col int) string {
-	focused := m.cursor == index
-	value := input.Value()
-	labelStyle := m.valueLabelStyle(focused)
-
-	if m.mode == ModeInsert && focused {
-		return lipgloss.JoinHorizontal(lipgloss.Left,
-			labelStyle.Width(col).Render(label),
-			"  ",
-			fieldActiveStyle.Render(input.View()),
-		)
-	}
-
-	if value == "" {
-		val := offStyle.Render("—")
-		if focused {
-			val = offStyle.Render("▍" + m.locale.PlaceholderTime)
-		}
-		return lipgloss.JoinHorizontal(lipgloss.Left,
-			labelStyle.Width(col).Render(label),
-			"  ",
-			val,
-		)
-	}
-
-	invalid := isInvalidTimeValue(value)
-	if isDuration {
-		invalid = isInvalidDurationValue(value)
-	}
-	valStyle := paramValueStyle
-	if focused {
-		valStyle = paramValueStyle.Underline(true).Foreground(colorAccent)
-	}
-	if invalid {
-		valStyle = statusErrorStyle
-	}
-
-	return lipgloss.JoinHorizontal(lipgloss.Left,
-		labelStyle.Width(col).Render(label),
-		"  ",
-		valStyle.Render(value),
-	)
 }
 
 func (m Model) renderStatusMessage() string {
@@ -800,8 +738,8 @@ func (m Model) renderProgressBar(percent float64, avail int) string {
 	return lipgloss.NewStyle().Foreground(colorAccent).Render(bar) + " " + statusBarStyle.Render(pct)
 }
 
-// renderProgressTimeline — прогресс-бар как шкала рабочего дня: слева время
-// начала, справа время окончания, под ним заполненная полоса и проценты.
+// renderProgressTimeline — шкала рабочего дня в две строки:
+// первая — время начала ─── время окончания; вторая — заполненный bar + pct.
 func (m Model) renderProgressTimeline(percent float64) string {
 	startStr := "—:—"
 	if s := m.startTime.Value(); s != "" {
@@ -810,16 +748,21 @@ func (m Model) renderProgressTimeline(percent float64) string {
 	endStr := m.formatResultEndPlain()
 
 	// Реальная доступная ширина с учётом времени начала/окончания по краям.
-	avail := max(m.dividerWidth()-lipgloss.Width(startStr)-lipgloss.Width(endStr)-4, 10)
+	total := max(m.dividerWidth(), 20)
+	avail := max(total-lipgloss.Width(startStr)-lipgloss.Width(endStr)-4, 10)
 	bar := m.renderProgressBar(percent, avail)
 
-	return lipgloss.JoinHorizontal(lipgloss.Left,
+	line := strings.Repeat("─", avail)
+	lead := lipgloss.JoinHorizontal(lipgloss.Left,
 		statusBarStyle.Render(startStr),
 		"  ",
-		bar,
+		breakLineStyle.Render(line),
 		"  ",
 		statusBarStyle.Render(endStr),
 	)
+
+	indent := lipgloss.Width(startStr) + 2
+	return lead + "\n" + strings.Repeat(" ", indent) + bar
 }
 
 // formatResultEndPlain возвращает только время окончания без timezone-суффикса.
@@ -829,15 +772,6 @@ func (m Model) formatResultEndPlain() string {
 		return "—:—"
 	}
 	return strings.SplitN(endStr, " ", 2)[0]
-}
-
-func (m Model) renderEmptyProgressBar() string {
-	barWidth := min(max(m.containerWidth()-14, 14), 50)
-	if barWidth > m.dividerWidth() {
-		barWidth = m.dividerWidth()
-	}
-	bar := strings.Repeat("░", barWidth)
-	return lipgloss.NewStyle().Foreground(colorMuted).Render(bar)
 }
 
 func (m Model) progressInfo() (percent float64, elapsed, remaining time.Duration, ok bool) {
@@ -984,7 +918,7 @@ func formatShortDuration(d time.Duration, loc Locale) string {
 func (m Model) renderControls() string {
 	k := func(s string) string { return controlKeyStyle.Render(s) }
 	d := func(s string) string { return statusBarStyle.Render(s) }
-	dot := headerDividerStyle.Render(" · ")
+	sep := "   "
 	divW := m.dividerWidth()
 
 	if m.mode == ModeInsert {
@@ -998,7 +932,7 @@ func (m Model) renderControls() string {
 		k("o") + " " + d(m.locale.CtrlOpen),
 		k("?") + " " + d(m.locale.CtrlHelp),
 		k("q") + " " + d(m.locale.CtrlQuit),
-	}, dot)
+	}, sep)
 
 	return controlsBarStyle.Width(divW).Render(line)
 }

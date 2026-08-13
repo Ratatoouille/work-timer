@@ -26,6 +26,7 @@ type Locale struct {
 
 	// --- Большой блок "оставшееся время" ---
 	RemainingLabel string
+	HeroDoneLabel  string // заголовок блока завершённого рабочего дня
 
 	// --- Статус таймера ---
 	StateRunning  string
@@ -176,6 +177,7 @@ var localeRU = Locale{
 	CheckboxShowIn:     "Показать в %s",
 
 	RemainingLabel: "ОСТАЛОСЬ",
+	HeroDoneLabel:  "РАБОЧИЙ ДЕНЬ ЗАВЕРШЁН",
 
 	StateRunning:  "РАБОТАЕМ",
 	StatePaused:   "ПЕРЕРЫВ",
@@ -314,6 +316,7 @@ var localeEN = Locale{
 	CheckboxShowIn:     "Show in %s",
 
 	RemainingLabel: "REMAINING",
+	HeroDoneLabel:  "WORK DAY COMPLETE",
 
 	StateRunning:  "RUNNING",
 	StatePaused:   "PAUSED",
