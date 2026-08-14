@@ -957,7 +957,10 @@ func (m Model) progressInfo() (percent float64, elapsed, remaining time.Duration
 		p = 0
 	}
 
-	remainingDuration := max(totalDuration-elapsedDuration, 0)
+	// elapsedDuration уже вычитает перерывы (работа), а totalDuration — полное
+	// окно (включая перерывы). Чтобы remaining был в тех же единицах (остаток
+	// работы), вычитаем перерывы из totalDuration один раз.
+	remainingDuration := max(totalDuration-breaksDur-elapsedDuration, 0)
 
 	return p, elapsedDuration, remainingDuration, true
 }
