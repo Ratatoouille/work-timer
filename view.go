@@ -945,11 +945,16 @@ func (m Model) progressInfo() (percent float64, elapsed, remaining time.Duration
 	breaksDur := m.getBreaksDuration()
 	elapsedDuration = max(elapsedDuration-breaksDur, 0)
 
-	if totalDuration <= 0 {
+	// totalWork — фактическое рабочее время (окно минус перерывы).
+	// percent и remaining считаются в одних единицах (работа), поэтому
+	// прогресс-бар корректно доходит до 100% к концу дня.
+	totalWork := max(totalDuration-breaksDur, 0)
+
+	if totalWork <= 0 {
 		return 0, 0, 0, false
 	}
 
-	p := float64(elapsedDuration) / float64(totalDuration)
+	p := float64(elapsedDuration) / float64(totalWork)
 	if p > 1.0 {
 		p = 1.0
 	}
@@ -957,10 +962,7 @@ func (m Model) progressInfo() (percent float64, elapsed, remaining time.Duration
 		p = 0
 	}
 
-	// elapsedDuration уже вычитает перерывы (работа), а totalDuration — полное
-	// окно (включая перерывы). Чтобы remaining был в тех же единицах (остаток
-	// работы), вычитаем перерывы из totalDuration один раз.
-	remainingDuration := max(totalDuration-breaksDur-elapsedDuration, 0)
+	remainingDuration := max(totalWork-elapsedDuration, 0)
 
 	return p, elapsedDuration, remainingDuration, true
 }
