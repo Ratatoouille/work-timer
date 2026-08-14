@@ -702,7 +702,8 @@ func TestProgressInfoNightShift(t *testing.T) {
 
 func TestProgressInfoWithBreaks(t *testing.T) {
 	// 09:00–17:00 with 1h break, now=13:00
-	// total=8h, elapsed=4h, break=1h → elapsed-break=3h, percent=3/8=0.375
+	// total=8h, elapsed=4h, break=1h → elapsed work=3h, totalWork=7h
+	// percent=3/7≈0.43, remaining=7-3=4h
 	now := time.Date(2025, 1, 15, 13, 0, 0, 0, time.UTC)
 	m := newProgressTestModel("09:00", "17:00", now)
 	m.addBreak()
@@ -713,11 +714,31 @@ func TestProgressInfoWithBreaks(t *testing.T) {
 	if !ok {
 		t.Fatal("progressInfo() with breaks ok = false, want true")
 	}
-	if percent < 0.37 || percent > 0.38 {
-		t.Errorf("percent = %.2f, want ~0.375", percent)
+	if percent < 0.42 || percent > 0.44 {
+		t.Errorf("percent = %.2f, want ~0.43", percent)
 	}
-	// total=8h, breaks=1h → work=7h, elapsed work=3h → remaining=4h
 	if remaining != 4*time.Hour {
 		t.Errorf("remaining = %v, want 4h", remaining)
+	}
+}
+
+func TestProgressInfoBreaksEndOfDay(t *testing.T) {
+	// 09:00–17:00 with 1h break, now=17:00 (end of window)
+	// totalWork=7h, elapsed work=7h → percent=1.0, remaining=0
+	now := time.Date(2025, 1, 15, 17, 0, 0, 0, time.UTC)
+	m := newProgressTestModel("09:00", "17:00", now)
+	m.addBreak()
+	m.breaks[0].from.SetValue("12:00")
+	m.breaks[0].to.SetValue("13:00")
+
+	percent, _, remaining, ok := m.progressInfo()
+	if !ok {
+		t.Fatal("progressInfo() ok = false, want true")
+	}
+	if percent != 1.0 {
+		t.Errorf("percent = %.2f, want 1.0", percent)
+	}
+	if remaining != 0 {
+		t.Errorf("remaining = %v, want 0", remaining)
 	}
 }
