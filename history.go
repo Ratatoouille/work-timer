@@ -54,7 +54,7 @@ func (h *HistoryStorage) Append(entry HistoryEntry) error {
 	}
 
 	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].Date > entries[j].Date
+		return historyDateSortKey(entries[i].Date).After(historyDateSortKey(entries[j].Date))
 	})
 
 	return h.write(entries)

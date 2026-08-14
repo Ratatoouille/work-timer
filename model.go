@@ -129,9 +129,23 @@ func (m *Model) setStatus(msg string, t StatusType) {
 	m.statusType = t
 }
 
-// todayFileName возвращает имя файла сохранения для текущей даты в формате DD_MM.json.
+// showToast устанавливает статусное сообщение и возвращает команду его
+// автоматического исчезновения через время из конфига. Все сообщения о
+// сохранении/загрузке/удалении/переименовании должны проходить через него,
+// чтобы единый toast-компонент исчезал сам через 2–3 секунды.
+func (m Model) showToast(msg string, t StatusType) tea.Cmd {
+	m.setStatus(msg, t)
+	d := time.Duration(m.config.UI.Timeouts.Status) * time.Second
+	if t == StatusError || t == StatusWarn {
+		d = time.Duration(m.config.UI.Timeouts.Warning) * time.Second
+	}
+	return clearStatusAfter(d)
+}
+
+// todayFileName возвращает имя файла сохранения для текущей даты в формате DD_MM.json
+// с обязательным ведущим нулём (03_08.json).
 func todayFileName() string {
-	return time.Now().Format("02_01") + ".json"
+	return formatFileDate(time.Now())
 }
 
 func NewModel(saveFile string) Model {
@@ -146,6 +160,11 @@ func NewModel(saveFile string) Model {
 	fileSearchInput := textinput.New()
 	fileSearchInput.Placeholder = "search files"
 	fileSearchInput.SetWidth(30)
+	// Плейсхолдер поиска — тусклее и курсивом, чтобы не путался с введённым текстом.
+	searchStyles := fileSearchInput.Styles()
+	searchStyles.Focused.Placeholder = searchStyles.Focused.Placeholder.Faint(true).Italic(true)
+	searchStyles.Blurred.Placeholder = searchStyles.Blurred.Placeholder.Faint(true).Italic(true)
+	fileSearchInput.SetStyles(searchStyles)
 
 	renameInput := textinput.New()
 	renameInput.Placeholder = "new_name.json"
@@ -202,6 +221,10 @@ func NewModel(saveFile string) Model {
 			m.loadState()
 		}
 	}
+
+	// Сразу вычисляем результат для загруженных данных, иначе расчёты не
+	// появятся, пока пользователь не нажмёт клавишу (движение курсора и т.п.).
+	m.recalculate()
 
 	return m
 }
@@ -431,8 +454,8 @@ func (m Model) updateSavePrompt(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 			absPath, err := toAbsolutePath(filePath)
 			if err != nil {
-				m.setStatus(fmt.Sprintf(m.locale.StatusPathError, err.Error()), StatusError)
-				return m, nil
+				toastCmd := m.showToast(fmt.Sprintf(m.locale.StatusPathError, err.Error()), StatusError)
+				return m, toastCmd
 			}
 
 			m.saveFile = absPath
@@ -443,9 +466,9 @@ func (m Model) updateSavePrompt(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, nil
 
 	case "esc":
-		m.setStatus(m.locale.StatusSaveCancelled, StatusNeutral)
+		cmd = m.showToast(m.locale.StatusSaveCancelled, StatusNeutral)
 		m.exitFileMode()
-		return m, nil
+		return m, cmd
 	}
 
 	m.filePathInput, cmd = m.filePathInput.Update(msg)
@@ -462,15 +485,15 @@ func (m Model) updateLoadPrompt(msg tea.KeyMsg) (Model, tea.Cmd) {
 		if filePath != "" {
 			absPath, err := toAbsolutePath(filePath)
 			if err != nil {
-				m.setStatus(fmt.Sprintf(m.locale.StatusPathError, err.Error()), StatusError)
-				return m, nil
+				toastCmd := m.showToast(fmt.Sprintf(m.locale.StatusPathError, err.Error()), StatusError)
+				return m, toastCmd
 			}
 
 			m.saveFile = absPath
 			m.storage = NewStorage(absPath)
 			m.loadState()
 
-			if strings.HasPrefix(m.statusMessage, "✅") {
+			if m.statusType == StatusSuccess {
 				m.exitFileMode()
 				return m, clearStatusAfter(time.Duration(m.config.UI.Timeouts.Status) * time.Second)
 			}
@@ -479,9 +502,9 @@ func (m Model) updateLoadPrompt(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, nil
 
 	case "esc":
-		m.setStatus(m.locale.StatusLoadCancelled, StatusNeutral)
+		cmd = m.showToast(m.locale.StatusLoadCancelled, StatusNeutral)
 		m.exitFileMode()
-		return m, nil
+		return m, cmd
 	}
 
 	m.filePathInput, cmd = m.filePathInput.Update(msg)
@@ -503,9 +526,9 @@ func (m Model) updateFileList(msg tea.KeyMsg) (Model, tea.Cmd) {
 				selectedFile := m.availableFiles[m.fileListCursor]
 				filePath := filepath.Join(m.workDir, selectedFile)
 				if err := os.Remove(filePath); err != nil {
-					m.setStatus(fmt.Sprintf(m.locale.StatusDeleteError, err.Error()), StatusError)
+					m.showToast(fmt.Sprintf(m.locale.StatusDeleteError, err.Error()), StatusError)
 				} else {
-					m.setStatus(fmt.Sprintf(m.locale.StatusDeleted, selectedFile), StatusSuccess)
+					m.showToast(fmt.Sprintf(m.locale.StatusDeleted, selectedFile), StatusSuccess)
 					m.loadAvailableFiles()
 					if m.fileListCursor >= len(m.availableFiles) && m.fileListCursor > 0 {
 						m.fileListCursor--
@@ -537,9 +560,9 @@ func (m Model) updateFileList(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, nil
 
 	case "esc":
-		m.setStatus(m.locale.StatusLoadCancelled, StatusNeutral)
+		clearCmd := m.showToast(m.locale.StatusLoadCancelled, StatusNeutral)
 		m.exitFileMode()
-		return m, nil
+		return m, clearCmd
 
 	case "j", "down":
 		if m.fileListCursor < len(m.availableFiles)-1 {
@@ -603,9 +626,9 @@ func (m Model) updateRenameMode(msg tea.KeyMsg) (Model, tea.Cmd) {
 			oldPath := filepath.Join(m.workDir, m.availableFiles[m.fileListCursor])
 			newPath := filepath.Join(m.workDir, newName)
 			if err := os.Rename(oldPath, newPath); err != nil {
-				m.setStatus(fmt.Sprintf(m.locale.StatusRenameError, err.Error()), StatusError)
+				m.showToast(fmt.Sprintf(m.locale.StatusRenameError, err.Error()), StatusError)
 			} else {
-				m.setStatus(fmt.Sprintf(m.locale.StatusRenamed, m.availableFiles[m.fileListCursor], newName), StatusSuccess)
+				m.showToast(fmt.Sprintf(m.locale.StatusRenamed, m.availableFiles[m.fileListCursor], newName), StatusSuccess)
 				m.loadAvailableFiles()
 				for i, f := range m.availableFiles {
 					if f == newName {
@@ -798,6 +821,11 @@ func (m *Model) loadAvailableFiles() {
 	}
 
 	sort.Slice(files, func(i, j int) bool {
+		di := fileSortDate(files[i].name, files[i].modTime)
+		dj := fileSortDate(files[j].name, files[j].modTime)
+		if !di.Equal(dj) {
+			return di.After(dj)
+		}
 		return files[i].modTime.After(files[j].modTime)
 	})
 
