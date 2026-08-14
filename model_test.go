@@ -709,11 +709,15 @@ func TestProgressInfoWithBreaks(t *testing.T) {
 	m.breaks[0].from.SetValue("12:00")
 	m.breaks[0].to.SetValue("13:00")
 
-	percent, _, _, ok := m.progressInfo()
+	percent, _, remaining, ok := m.progressInfo()
 	if !ok {
 		t.Fatal("progressInfo() with breaks ok = false, want true")
 	}
 	if percent < 0.37 || percent > 0.38 {
 		t.Errorf("percent = %.2f, want ~0.375", percent)
+	}
+	// total=8h, breaks=1h → work=7h, elapsed work=3h → remaining=4h
+	if remaining != 4*time.Hour {
+		t.Errorf("remaining = %v, want 4h", remaining)
 	}
 }
