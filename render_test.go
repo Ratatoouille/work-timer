@@ -122,14 +122,20 @@ func TestRenderNoStatusInMiddle(t *testing.T) {
 	m.setStatus("Загрузка отменена", StatusError)
 
 	rendered := m.renderMain()
-	// Статус должен быть после controls (footer), не в середине.
+	// Статус должен быть прямо над футером (под разделителем), отделён от
+	// статичных подсказок клавиш, а не в середине контента.
 	controlsIdx := strings.Index(rendered, "сохранить")
 	statusIdx := strings.Index(rendered, "Загрузка отменена")
+	// Разделитель, под которым идёт статус, должен идти до строки статуса.
+	divIdx := strings.Index(rendered, "──")
 	if statusIdx == -1 {
 		t.Fatalf("status should appear somewhere: \n%s", rendered)
 	}
-	if statusIdx < controlsIdx {
-		t.Errorf("status must render after footer, not in middle:\n%s", rendered)
+	if controlsIdx == -1 || statusIdx > controlsIdx {
+		t.Errorf("status must render above footer (before 'сохранить')\nstatus=%d controls=%d\n%s", statusIdx, controlsIdx, rendered)
+	}
+	if divIdx == -1 || statusIdx < divIdx {
+		t.Errorf("status must be below the horizontal divider\ndiv=%d status=%d", divIdx, statusIdx)
 	}
 }
 

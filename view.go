@@ -131,7 +131,6 @@ func initStyles(cfg Config) {
 		Foreground(lipgloss.Color("15"))
 
 	breakTimeStyle = lipgloss.NewStyle().
-		Foreground(colorAccent).
 		Bold(true)
 	breakLineStyle = lipgloss.NewStyle().Foreground(colorMuted)
 	breakDurStyle = lipgloss.NewStyle().Foreground(colorMuted)
@@ -252,8 +251,8 @@ func (m Model) renderMain() string {
 	b.WriteString(m.renderBreaks())
 	b.WriteString(m.renderParams())
 	b.WriteString(m.renderResult())
-	b.WriteString(m.renderControls())
 	b.WriteString(m.renderStatusMessage())
+	b.WriteString(m.renderControls())
 	return b.String()
 }
 
@@ -417,7 +416,13 @@ func (m Model) onBreak() bool {
 	if _, _, _, ok := m.progressInfo(); !ok {
 		return false
 	}
-	nowStr := m.currentTime.Format("15:04")
+	// Перерывы задаются в input_timezone (как и время начала/окончания),
+	// поэтому текущее время сравниваем в той же зоне.
+	inputLoc := TimezoneLocation(m.config.InputTimezone)
+	if inputLoc == nil {
+		inputLoc = time.Local
+	}
+	nowStr := m.currentTime.In(inputLoc).Format("15:04")
 	for _, br := range m.getBreaksData() {
 		if br.From == "" || br.To == "" {
 			continue
@@ -462,7 +467,7 @@ func (m Model) renderTimerRow() string {
 	} else if m.startTime.Value() != "" {
 		start = paramValueStyle.Render(m.startTime.Value())
 		if m.cursor == FieldStartTime {
-			start = paramValueStyle.Underline(true).Foreground(colorError).Render(m.startTime.Value())
+			start = paramValueStyle.Underline(true).Foreground(colorAccent).Render(m.startTime.Value())
 		}
 	} else {
 		start = statusBarStyle.Render("—:—")
@@ -506,18 +511,22 @@ func (m Model) renderBreakRow(idx, baseIndex int, br Break) string {
 	focusedTo := m.cursor == baseIndex+1
 
 	// В Insert-режиме фокусируемое поле перерыва показываем как textinput.
+	// JoinHorizontal выравнивает многострочную обводку поля по левому краю,
+	// чтобы отступ "  " применялся ко всем строкам рамки.
 	if m.mode == ModeInsert && (focusedFrom || focusedTo) {
 		if focusedFrom {
-			return "  " + fieldActiveStyle.Render(br.from.View()) + "  " + offStyle.Render("—:—")
+			return lipgloss.JoinHorizontal(lipgloss.Left, "  ",
+				fieldActiveStyle.Render(br.from.View()), "  ", offStyle.Render("—:—"))
 		}
-		return "  " + offStyle.Render("—:—") + "  " + fieldActiveStyle.Render(br.to.View())
+		return lipgloss.JoinHorizontal(lipgloss.Left, "  ",
+			offStyle.Render("—:—"), "  ", fieldActiveStyle.Render(br.to.View()))
 	}
 
 	dispFrom := offStyle.Render("—:—")
 	if from != "" {
 		st := breakTimeStyle
 		if focusedFrom {
-			st = st.Bold(true).Underline(true).Foreground(colorError)
+			st = st.Bold(true).Underline(true).Foreground(colorAccent)
 		}
 		dispFrom = st.Render(from)
 	} else if focusedFrom {
@@ -527,7 +536,7 @@ func (m Model) renderBreakRow(idx, baseIndex int, br Break) string {
 	if to != "" {
 		st := breakTimeStyle
 		if focusedTo {
-			st = st.Bold(true).Underline(true).Foreground(colorError)
+			st = st.Bold(true).Underline(true).Foreground(colorAccent)
 		}
 		dispTo = st.Render(to)
 	} else if focusedTo {
@@ -548,7 +557,10 @@ func (m Model) renderBreakRow(idx, baseIndex int, br Break) string {
 			row = lipgloss.JoinHorizontal(lipgloss.Left, row, "   ", breakDurStyle.Render(formatShortDuration(d, m.locale)))
 		}
 	}
-	return "  " + row
+	// JoinHorizontal нужен, чтобы в Insert-режиме многострочная обводка поля
+	// (бокс из fieldActiveStyle) выравнивалась: последующие строки рамки
+	// получают тот же отступ, что и первая.
+	return lipgloss.JoinHorizontal(lipgloss.Left, "  ", row)
 }
 
 func (m Model) renderParams() string {
@@ -597,7 +609,7 @@ func (m Model) renderParams() string {
 		if m.addTZ {
 			s = "Да"
 		}
-		tzVal = paramValueStyle.Underline(true).Foreground(colorError).Render(s)
+		tzVal = paramValueStyle.Underline(true).Foreground(colorAccent).Render(s)
 	}
 	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Left, tzLabel.Width(col).Render(checkboxLabel(m)), "  ", tzVal) + "\n")
 
@@ -660,7 +672,7 @@ func (m Model) renderValueFieldAt(index int, label string, input textinput.Model
 	}
 	valStyle := paramValueStyle
 	if focused {
-		valStyle = paramValueStyle.Underline(true).Foreground(colorError)
+		valStyle = paramValueStyle.Underline(true).Foreground(colorAccent)
 	}
 	if invalid {
 		valStyle = statusErrorStyle
@@ -676,7 +688,7 @@ func (m Model) renderValueFieldAt(index int, label string, input textinput.Model
 func (m Model) valueLabelStyle(focused bool) lipgloss.Style {
 	s := paramLabelStyle
 	if focused {
-		s = s.Bold(true).Foreground(colorError)
+		s = s.Bold(true).Foreground(colorAccent)
 	}
 	return s
 }
@@ -698,6 +710,8 @@ func (m Model) renderStatusMessage() string {
 		s = statusBarStyle.Render(m.statusMessage)
 	}
 
+	// Статус действия выводится над футером, сразу под горизонтальным
+	// разделителем, отделяясь от статичных подсказок клавиш.
 	return "\n" + s + "\n"
 }
 
@@ -793,6 +807,14 @@ func utcOffsetLabel(tz string) string {
 // renderProgressBar рисует текстовый прогресс-бар с процентом на той же строке.
 // avail (если >0) ограничивает ширину полосы; иначе считается из контейнера.
 func (m Model) renderProgressBar(percent float64, avail int) string {
+	pct := percent
+	if pct > 1.0 {
+		pct = 1.0
+	}
+	if pct < 0 {
+		pct = 0
+	}
+
 	barWidth := min(max(m.containerWidth()-14, 14), 50)
 	if avail > 0 {
 		barWidth = min(avail, barWidth)
@@ -801,48 +823,22 @@ func (m Model) renderProgressBar(percent float64, avail int) string {
 		barWidth = m.dividerWidth()
 	}
 	barWidth = max(barWidth, 4)
-	filled := int(percent * float64(barWidth))
+
+	// Одна формула: доля → количество заполненных сегментов и процент.
+	filled := int(pct * float64(barWidth))
 	filled = min(filled, barWidth)
 	filled = max(filled, 0)
+	pctText := fmt.Sprintf("%.0f%%", pct*100)
+
 	bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
-	pct := fmt.Sprintf("%3.0f%%", percent*100)
-	return lipgloss.NewStyle().Foreground(colorAccent).Render(bar) + " " + statusBarStyle.Render(pct)
+	return lipgloss.NewStyle().Foreground(colorAccent).Render(bar) + " " + statusBarStyle.Render(pctText)
 }
 
-// renderProgressTimeline — шкала рабочего дня в две строки:
-// первая — время начала ─── время окончания; вторая — заполненный bar + pct.
+// renderProgressTimeline — прогресс-бар рабочего дня. Время начала/окончания
+// выводится только в отдельном блоке renderTimerRow (без дублирования).
 func (m Model) renderProgressTimeline(percent float64) string {
-	startStr := "—:—"
-	if s := m.startTime.Value(); s != "" {
-		startStr = s
-	}
-	endStr := m.formatResultEndPlain()
-
-	// Реальная доступная ширина с учётом времени начала/окончания по краям.
 	total := max(m.dividerWidth(), 20)
-	avail := max(total-lipgloss.Width(startStr)-lipgloss.Width(endStr)-4, 10)
-	bar := m.renderProgressBar(percent, avail)
-
-	line := strings.Repeat("─", avail)
-	lead := lipgloss.JoinHorizontal(lipgloss.Left,
-		statusBarStyle.Render(startStr),
-		"  ",
-		breakLineStyle.Render(line),
-		"  ",
-		statusBarStyle.Render(endStr),
-	)
-
-	indent := lipgloss.Width(startStr) + 2
-	return lead + "\n" + strings.Repeat(" ", indent) + bar
-}
-
-// formatResultEndPlain возвращает только время окончания без timezone-суффикса.
-func (m Model) formatResultEndPlain() string {
-	endStr := strings.TrimSpace(m.result)
-	if endStr == "" {
-		return "—:—"
-	}
-	return strings.SplitN(endStr, " ", 2)[0]
+	return m.renderProgressBar(percent, total)
 }
 
 func (m Model) progressInfo() (percent float64, elapsed, remaining time.Duration, ok bool) {
@@ -1010,7 +1006,7 @@ func (m Model) renderControls() string {
 
 func (m Model) renderSavePrompt() string {
 	body := headerStyle.Render(m.locale.SaveTitle) +
-		"\n\n" + statusBarStyle.Render(fmt.Sprintf(m.locale.SaveFolder, m.workDir)) +
+		"\n\n" + statusBarStyle.Render(fmt.Sprintf(m.locale.SaveFolder, tildePath(m.workDir))) +
 		"\n\n" + m.filePathInput.View()
 
 	if m.statusMessage != "" {
@@ -1041,8 +1037,8 @@ func (m Model) renderFileList() string {
 	// Единый заголовок (в стиле заголовка приложения), без декоративного emoji.
 	b.WriteString(headerStyle.Render(m.locale.FileListTitle) + "\n\n")
 
-	// Путь — приглушённый, не доминирует.
-	b.WriteString(statusBarStyle.Render(fmt.Sprintf(m.locale.SaveFolder, m.workDir)) + "\n\n")
+	// Путь — приглушённый, не доминирует. Сокращаем до ~.
+	b.WriteString(statusBarStyle.Render(fmt.Sprintf(m.locale.SaveFolder, tildePath(m.workDir))) + "\n\n")
 
 	// Поиск — обычное TUI-поле (активируется клавишей "/").
 	var searchInput string
@@ -1125,6 +1121,17 @@ func (m Model) renderHistory() string {
 
 	// Список записей в том же стиле, что и список файлов: маркер "▸" у
 	// выбранной записи, фиксированные колонки.
+	// Заголовок колонок: Дата | Начало | Окончание | Перерывы.
+	colDate := m.labelCol(m.locale.HistoryColDate, "00-00-0000")
+	colTime := m.labelCol(m.locale.HistoryColStart, m.locale.HistoryColEnd, "00:00")
+	headerLine := fmt.Sprintf("%-*s  %-*s  %-*s  %s",
+		colDate, m.locale.HistoryColDate,
+		colTime, m.locale.HistoryColStart,
+		colTime, m.locale.HistoryColEnd,
+		m.locale.HistoryColBreak)
+	b.WriteString(statusBarStyle.Render("  "+headerLine) + "\n")
+	b.WriteString(statusBarStyle.Render("  "+strings.Repeat("─", lipgloss.Width(headerLine))) + "\n")
+
 	for i, e := range m.historyEntries {
 		startStr := e.StartTime
 		if startStr == "" {
@@ -1134,12 +1141,19 @@ func (m Model) renderHistory() string {
 		if endStr == "" {
 			endStr = "—:—"
 		}
-		breaksInfo := e.BreaksDur
+		// Перерывы: количество × суммарная длительность, как на главном экране.
+		// Без перерывов — "—".
+		breaksInfo := "—"
 		if e.Breaks > 0 {
-			breaksInfo = fmt.Sprintf("%d × %s", e.Breaks, e.BreaksDur)
+			d := parseBreakDur(e.BreaksDur)
+			breaksInfo = fmt.Sprintf("%d × %s", e.Breaks, formatShortDuration(d, m.locale))
 		}
-		line := fmt.Sprintf("%-12s  %-6s  %-8s  %-12s",
-			e.Date, startStr, endStr, breaksInfo)
+		dateStr := formatDisplayDate(e.Date)
+		line := fmt.Sprintf("%-*s  %-*s  %-*s  %s",
+			colDate, dateStr,
+			colTime, startStr,
+			colTime, endStr,
+			breaksInfo)
 		if i == m.historyCursor {
 			b.WriteString(fileListItemActiveStyle.Render("▸ "+line) + "\n")
 		} else {
@@ -1190,12 +1204,12 @@ func (m Model) renderHelp() string {
 			row("space", m.locale.CtrlCheckbox)+"\n"+
 			row("y", m.locale.CtrlCopy)+"\n"+
 			row("1-9", m.locale.CtrlQuickInput)+"\n"+
-			row("s", m.locale.CtrlSave)+"\n"+
-			row("o", m.locale.CtrlOpen)+"\n")
+			row("s = Ctrl+S", m.locale.CtrlSave)+"\n"+
+			row("o = Ctrl+O", m.locale.CtrlOpen)+"\n")
 
 	writeSection(m.locale.HelpModes,
-		statusBarStyle.Render("  "+m.locale.HelpMode1Desc)+"\n"+
-			statusBarStyle.Render("  "+m.locale.HelpMode2Desc)+"\n"+
+		row("1", m.locale.HelpMode1Desc)+"\n"+
+			row("2", m.locale.HelpMode2Desc)+"\n"+
 			row("x", m.locale.CtrlClear)+"\n")
 
 	writeSection(m.locale.HelpFileList,
@@ -1209,9 +1223,7 @@ func (m Model) renderHelp() string {
 
 	writeSection(m.locale.HelpGeneral,
 		row("?", m.locale.CtrlHelp)+"\n"+
-			row("q", m.locale.CtrlQuit)+"\n"+
-			row("Ctrl+S", m.locale.CtrlSave)+"\n"+
-			row("Ctrl+O", m.locale.CtrlOpen)+"\n")
+			row("q", m.locale.CtrlQuit)+"\n")
 
 	b.WriteString(statusBarStyle.Render(m.locale.HowModes) + "\n\n")
 	b.WriteString(fd(m.locale.HelpConfig+": ") + fk(ConfigPath) + "\n")

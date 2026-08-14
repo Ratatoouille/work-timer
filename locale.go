@@ -101,15 +101,15 @@ type Locale struct {
 	StatusUnsaved       string
 	StatusSaveCancelled string
 	StatusLoadCancelled string
-	StatusSavedAs       string // "✅ Сохранено: %s"
-	StatusLoadedFrom    string // "✅ Загружено: %s"
-	StatusSaveError     string // "❌ Ошибка сохранения: %s"
-	StatusLoadError     string // "❌ Ошибка загрузки: %s"
-	StatusPathError     string // "❌ Ошибка пути: %s"
-	StatusDeleted       string // "✅ Удалено: %s"
-	StatusDeleteError   string // "❌ Ошибка удаления: %s"
-	StatusRenamed       string // "✅ Переименовано: %s → %s"
-	StatusRenameError   string // "❌ Ошибка переименования: %s"
+	StatusSavedAs       string // "Сохранено: %s"
+	StatusLoadedFrom    string // "Загружено: %s"
+	StatusSaveError     string // "Ошибка сохранения: %s"
+	StatusLoadError     string // "Ошибка загрузки: %s"
+	StatusPathError     string // "Ошибка пути: %s"
+	StatusDeleted       string // "Удалено: %s"
+	StatusDeleteError   string // "Ошибка удаления: %s"
+	StatusRenamed       string // "Переименовано: %s → %s"
+	StatusRenameError   string // "Ошибка переименования: %s"
 	StatusDayEnded      string
 
 	// --- Ошибки калькулятора ---
@@ -156,12 +156,13 @@ type Locale struct {
 	CtrlQuickInput  string // клавиши 1-9 — быстрый ввод
 	HelpMode1Desc   string
 	HelpMode2Desc   string
+	HelpAlias       string // пометка, что клавиша — алиас того же действия
 }
 
 var localeRU = Locale{
 	ModeNormal:     "Обычный",
 	ModeInsert:     "Ввод",
-	NoFileSelected: "○ файл не выбран",
+	NoFileSelected: "• файл не выбран",
 
 	SectionMain:   "Основные параметры",
 	SectionBreaks: "Перерывы",
@@ -228,7 +229,7 @@ var localeRU = Locale{
 	FileListHint:    "[j/k ↑↓] навигация  [Enter] выбрать",
 	FileListHint2:   "[/] поиск  [d] удалить  [r] переименовать  [n] новый  [Esc] отмена",
 	FileSearchLabel: "Search",
-	ConfirmDelete:   "⚠  Удалить %s? [y] да  [n/Esc] отмена",
+	ConfirmDelete:   "Удалить %s? [y] да  [n/Esc] отмена",
 	RenamePrompt:    "Новое имя:",
 	PresetTitle:     "Добавить перерыв из шаблона",
 	PresetEmpty:     "Шаблоны перерывов не настроены",
@@ -242,20 +243,20 @@ var localeRU = Locale{
 	HistoryColBreak: "Перерывы",
 	HistoryColSaved: "Сохр.",
 
-	StatusCopied:        "✅ Скопировано в буфер обмена",
-	StatusUnsaved:       "⚠  Есть несохранённые изменения. Нажмите q ещё раз для выхода",
+	StatusCopied:        "Скопировано в буфер обмена",
+	StatusUnsaved:       "Есть несохранённые изменения. Нажмите q ещё раз для выхода",
 	StatusSaveCancelled: "Сохранение отменено",
 	StatusLoadCancelled: "Загрузка отменена",
-	StatusSavedAs:       "✅ Сохранено: %s",
-	StatusLoadedFrom:    "✅ Загружено: %s",
-	StatusSaveError:     "❌ Ошибка сохранения: %s",
-	StatusLoadError:     "❌ Ошибка загрузки: %s",
-	StatusPathError:     "❌ Ошибка пути: %s",
-	StatusDeleted:       "✅ Удалено: %s",
-	StatusDeleteError:   "❌ Ошибка удаления: %s",
-	StatusRenamed:       "✅ Переименовано: %s → %s",
-	StatusRenameError:   "❌ Ошибка переименования: %s",
-	StatusDayEnded:      "🎉 Рабочий день окончен!",
+	StatusSavedAs:       "Сохранено: %s",
+	StatusLoadedFrom:    "Загружено: %s",
+	StatusSaveError:     "Ошибка сохранения: %s",
+	StatusLoadError:     "Ошибка загрузки: %s",
+	StatusPathError:     "Ошибка пути: %s",
+	StatusDeleted:       "Удалено: %s",
+	StatusDeleteError:   "Ошибка удаления: %s",
+	StatusRenamed:       "Переименовано: %s → %s",
+	StatusRenameError:   "Ошибка переименования: %s",
+	StatusDayEnded:      "Рабочий день окончен!",
 
 	ErrInvalidStartTime:    "неверное время начала",
 	ErrInvalidWorked:       "неверный формат 'отработано'",
@@ -295,14 +296,15 @@ var localeRU = Locale{
 	CtrlSelect:      "выбрать",
 	CtrlCurrentTime: "вставить текущее время",
 	CtrlQuickInput:  "быстрый ввод значения",
-	HelpMode1Desc:   "заполни «Оставшееся время»",
-	HelpMode2Desc:   "заполни «Отработано» и «План»",
+	HelpMode1Desc:   "Режим 1: заполни «Оставшееся время»",
+	HelpMode2Desc:   "Режим 2: заполни «Отработано» и «План»",
+	HelpAlias:       "алиас того же действия",
 }
 
 var localeEN = Locale{
 	ModeNormal:     "Normal",
 	ModeInsert:     "Insert",
-	NoFileSelected: "○ no file selected",
+	NoFileSelected: "• no file selected",
 
 	SectionMain:   "Main parameters",
 	SectionBreaks: "Breaks",
@@ -369,7 +371,7 @@ var localeEN = Locale{
 	FileListHint:    "[j/k ↑↓] navigate  [Enter] select",
 	FileListHint2:   "[/] search  [d] delete  [r] rename  [n] new  [Esc] cancel",
 	FileSearchLabel: "Search",
-	ConfirmDelete:   "⚠  Delete %s? [y] yes  [n/Esc] cancel",
+	ConfirmDelete:   "Delete %s? [y] yes  [n/Esc] cancel",
 	RenamePrompt:    "New name:",
 	PresetTitle:     "Add break from preset",
 	PresetEmpty:     "No break presets configured",
@@ -383,20 +385,20 @@ var localeEN = Locale{
 	HistoryColBreak: "Breaks",
 	HistoryColSaved: "Saved",
 
-	StatusCopied:        "✅ Copied to clipboard",
-	StatusUnsaved:       "⚠  Unsaved changes. Press q again to quit",
+	StatusCopied:        "Copied to clipboard",
+	StatusUnsaved:       "Unsaved changes. Press q again to quit",
 	StatusSaveCancelled: "Save cancelled",
 	StatusLoadCancelled: "Load cancelled",
-	StatusSavedAs:       "✅ Saved: %s",
-	StatusLoadedFrom:    "✅ Loaded: %s",
-	StatusSaveError:     "❌ Save error: %s",
-	StatusLoadError:     "❌ Load error: %s",
-	StatusPathError:     "❌ Path error: %s",
-	StatusDeleted:       "✅ Deleted: %s",
-	StatusDeleteError:   "❌ Delete error: %s",
-	StatusRenamed:       "✅ Renamed: %s → %s",
-	StatusRenameError:   "❌ Rename error: %s",
-	StatusDayEnded:      "🎉 Work day is over!",
+	StatusSavedAs:       "Saved: %s",
+	StatusLoadedFrom:    "Loaded: %s",
+	StatusSaveError:     "Save error: %s",
+	StatusLoadError:     "Load error: %s",
+	StatusPathError:     "Path error: %s",
+	StatusDeleted:       "Deleted: %s",
+	StatusDeleteError:   "Delete error: %s",
+	StatusRenamed:       "Renamed: %s → %s",
+	StatusRenameError:   "Rename error: %s",
+	StatusDayEnded:      "Work day is over!",
 
 	ErrInvalidStartTime:    "invalid start time",
 	ErrInvalidWorked:       "invalid format for 'worked'",
@@ -438,6 +440,7 @@ var localeEN = Locale{
 	CtrlQuickInput:  "quick input value",
 	HelpMode1Desc:   "fill \"Remaining time\"",
 	HelpMode2Desc:   "fill \"Worked\" and \"Plan\"",
+	HelpAlias:       "alias of the same action",
 }
 
 // LoadLocale возвращает локаль по коду языка. Неизвестный код → русский.
