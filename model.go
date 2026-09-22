@@ -117,6 +117,7 @@ type Model struct {
 	// Services
 	storage    *Storage
 	calculator *Calculator
+	tray       *TrayManager
 }
 
 type Break struct {
@@ -273,6 +274,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		m.currentTime = time.Now()
 		m.checkDayEnd()
+		m.updateTray()
 		return m, tick()
 	}
 
@@ -1049,6 +1051,21 @@ func (m *Model) checkDayEnd() {
 	}
 }
 
+// updateTray обновляет индикатор в трее по текущему состоянию таймера.
+// Безопасен при выключенном трее (m.tray == nil).
+func (m *Model) updateTray() {
+	if m.tray == nil {
+		return
+	}
+	_, _, remaining, ok := m.progressInfo()
+	m.tray.Update(TrayState{
+		Remaining: remaining,
+		EndTime:   m.result,
+		Ok:        ok,
+		DayEnded:  m.dayEnded,
+	})
+}
+
 func (m *Model) recalculate() {
 	// Snapshot всех входных значений для пропуска лишних вычислений
 	var sb strings.Builder
@@ -1104,11 +1121,13 @@ func (m *Model) recalculate() {
 	if err != nil {
 		m.err = err.Error()
 		m.result = ""
+		m.updateTray()
 		return
 	}
 
 	m.result = result
 	m.err = ""
+	m.updateTray()
 }
 
 func (m Model) getBreaksData() []BreakTime {

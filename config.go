@@ -19,7 +19,12 @@ type Config struct {
 	Timezone      string            `toml:"timezone"`
 	Breaks        []BreakPreset     `toml:"breaks"`
 	QuickInputs   map[string]string `toml:"quick_inputs"`
+	Tray          ConfigTray        `toml:"tray"`
 	UI            ConfigUI          `toml:"ui"`
+}
+
+type ConfigTray struct {
+	Enabled bool `toml:"enabled"`
 }
 
 type BreakPreset struct {
@@ -61,6 +66,9 @@ func defaultConfig() Config {
 		QuickInputs: map[string]string{
 			"1": "08:00",
 			"2": "09:00",
+		},
+		Tray: ConfigTray{
+			Enabled: false,
 		},
 		UI: ConfigUI{
 			LabelWidth: 22,
@@ -192,6 +200,12 @@ timezone = ""
 # [quick_inputs]
 # "1" = "08:00"
 # "2" = "09:00"
+
+# Индикатор оставшегося времени в системном трее (Linux).
+# Требует установленной libayatana-appindicator и расширения AppIndicator
+# в GNOME. Если библиотека недоступна — трей просто не запустится.
+[tray]
+enabled = false
 
 [ui]
 # Ширина колонки лейблов (символов)

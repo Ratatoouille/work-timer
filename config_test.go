@@ -39,6 +39,9 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.UI.Timeouts.Warning != 4 {
 		t.Errorf("Warning timeout = %v, want 4", cfg.UI.Timeouts.Warning)
 	}
+	if cfg.Tray.Enabled {
+		t.Error("Tray.Enabled should default to false")
+	}
 }
 
 func TestLoadConfigCreatesDefault(t *testing.T) {
@@ -125,6 +128,32 @@ warning   = 7
 	}
 	if cfg.UI.Timeouts.Clipboard != 5 {
 		t.Errorf("Clipboard = %v, want 5", cfg.UI.Timeouts.Clipboard)
+	}
+}
+
+func TestLoadConfigParsesTray(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "work-timer-config-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	t.Setenv("HOME", tmpDir)
+
+	configDir := filepath.Join(tmpDir, ".config", "work_timer")
+	_ = os.MkdirAll(configDir, 0o755)
+
+	content := `
+language = "en"
+
+[tray]
+enabled = true
+`
+	_ = os.WriteFile(filepath.Join(configDir, "config.toml"), []byte(content), 0o644)
+
+	cfg := LoadConfig()
+	if !cfg.Tray.Enabled {
+		t.Error("Tray.Enabled = false, want true")
 	}
 }
 

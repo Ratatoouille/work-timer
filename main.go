@@ -32,9 +32,26 @@ func main() {
 		}
 	}
 
-	p := tea.NewProgram(NewModel(saveFile))
+	m := NewModel(saveFile)
+
+	if m.config.Tray.Enabled {
+		if tray := startTray(m.config, m.locale); tray != nil {
+			m.tray = tray
+		}
+	}
+
+	p := tea.NewProgram(m)
+
+	if m.tray != nil {
+		m.tray.SetOnQuit(func() { p.Quit() })
+	}
+
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
+	}
+
+	if m.tray != nil {
+		m.tray.Quit()
 	}
 }

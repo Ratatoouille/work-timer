@@ -96,6 +96,12 @@ func TestLocaleAllFieldsNonEmpty(t *testing.T) {
 			"CtrlCurrentTime":      loc.CtrlCurrentTime,
 			"CtrlQuickInput":       loc.CtrlQuickInput,
 			"HelpMode1Desc":        loc.HelpMode1Desc,
+			"TrayRemaining":        loc.TrayRemaining,
+			"TrayNoData":           loc.TrayNoData,
+			"TrayEndTime":          loc.TrayEndTime,
+			"TrayDone":             loc.TrayDone,
+			"TrayTooltip":          loc.TrayTooltip,
+			"TrayQuit":             loc.TrayQuit,
 		}
 
 		for field, value := range fields {

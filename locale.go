@@ -112,6 +112,14 @@ type Locale struct {
 	StatusRenameError   string // "Ошибка переименования: %s"
 	StatusDayEnded      string
 
+	// --- Трей ---
+	TrayRemaining string // "Осталось: %s" — заголовок пункта меню
+	TrayNoData    string // "нет данных"
+	TrayEndTime   string // "Окончание: %s"
+	TrayDone      string // "рабочий день окончен"
+	TrayTooltip   string // "%s\n%s"
+	TrayQuit      string // "Выход"
+
 	// --- Ошибки калькулятора ---
 	ErrInvalidStartTime    string
 	ErrInvalidWorked       string
@@ -258,6 +266,13 @@ var localeRU = Locale{
 	StatusRenameError:   "Ошибка переименования: %s",
 	StatusDayEnded:      "Рабочий день окончен!",
 
+	TrayRemaining: "Осталось: %s",
+	TrayNoData:    "нет данных",
+	TrayEndTime:   "Окончание: %s",
+	TrayDone:      "рабочий день окончен",
+	TrayTooltip:   "%s\n%s",
+	TrayQuit:      "Выход",
+
 	ErrInvalidStartTime:    "неверное время начала",
 	ErrInvalidWorked:       "неверный формат 'отработано'",
 	ErrInvalidPlan:         "неверный формат 'план'",
@@ -399,6 +414,13 @@ var localeEN = Locale{
 	StatusRenamed:       "Renamed: %s → %s",
 	StatusRenameError:   "Rename error: %s",
 	StatusDayEnded:      "Work day is over!",
+
+	TrayRemaining: "Remaining: %s",
+	TrayNoData:    "no data",
+	TrayEndTime:   "End: %s",
+	TrayDone:      "work day complete",
+	TrayTooltip:   "%s\n%s",
+	TrayQuit:      "Quit",
 
 	ErrInvalidStartTime:    "invalid start time",
 	ErrInvalidWorked:       "invalid format for 'worked'",
