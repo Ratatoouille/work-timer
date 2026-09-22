@@ -12,7 +12,21 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
+
+// containerChrome — горизонтальные накладные расходы контейнера:
+// рамка (2) + паддинг слева/справа (4).
+const containerChrome = 6
+
+// containerChromeV — вертикальные накладные расходы контейнера:
+// рамка (2) + паддинг сверху/снизу (2).
+const containerChromeV = 4
+
+// minContainerWidth — минимальная ширина контейнера. Ниже неё поля и
+// подписи перестают помещаться, но на очень узких терминалах контейнер
+// всё равно не должен выходить за границы окна.
+const minContainerWidth = 34
 
 // Стили инициализируются из конфига через initStyles().
 var (
@@ -178,31 +192,65 @@ func initStyles(cfg Config) {
 }
 
 // containerWidth возвращает ширину основного блока в зависимости от терминала.
+// Ширина никогда не превышает ширину окна (иначе блок не влезет), имеет
+// разумный максимум для широких терминалов и минимум для очень узких.
 func (m Model) containerWidth() int {
-	w := m.width - 4
-	if w < 52 {
+	if m.width == 0 {
 		return 52
 	}
+	w := m.width - 4
 	if w > 92 {
-		return 92
+		w = 92
+	}
+	if w < minContainerWidth {
+		w = minContainerWidth
+	}
+	// Не выходить за пределы окна: обрезка рамки недопустима.
+	if w > m.width {
+		w = m.width
+	}
+	return w
+}
+
+// contentWidth — доступная ширина внутри рамки и паддинга контейнера.
+func (m Model) contentWidth() int {
+	w := m.containerWidth() - containerChrome
+	if w < 8 {
+		w = 8
 	}
 	return w
 }
 
 func (m Model) dividerWidth() int {
-	w := m.containerWidth() - 8
-	if w < 40 {
-		return 40
+	w := m.contentWidth()
+	if w < 16 {
+		w = 16
 	}
 	return w
 }
 
+// truncate обрезает строку (включая ANSI-последовательности) до maxWidth
+// видимых ячеек, добавляя многоточие, если обрезка произошла.
+func truncate(s string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return ""
+	}
+	if lipgloss.Width(s) <= maxWidth {
+		return s
+	}
+	if maxWidth <= 1 {
+		return ansi.Truncate(s, maxWidth, "")
+	}
+	return ansi.Truncate(s, maxWidth, "…")
+}
+
 // labelCol — ширина колонки label/value пар. Равна ширине самого длинного
 // видимого label (чтобы пары выравнивались и длинные подписи не переносились),
-// но ограничена шириной контейнера, оставляя место для значения.
+// но не больше половины доступной ширины контейнера, оставляя место для
+// значения. На узких терминалах подпись обрезается до этой ширины.
 func (m Model) labelCol(labels ...string) int {
 	widest := 0
-	maxAvail := max(m.containerWidth()-14, 8)
+	maxAvail := max(m.contentWidth()-12, 6)
 	for _, l := range labels {
 		if w := lipgloss.Width(l); w > widest {
 			widest = w
@@ -212,6 +260,12 @@ func (m Model) labelCol(labels ...string) int {
 		widest = maxAvail
 	}
 	return widest
+}
+
+// labelCell рендерит подпись в колонку фиксированной ширины col. Если подпись
+// длиннее колонки, она обрезается (lipgloss.Width не усекает содержимое).
+func labelCell(style lipgloss.Style, label string, col int) string {
+	return style.Width(col).Render(truncate(label, col))
 }
 
 func (m Model) View() tea.View {
@@ -238,22 +292,163 @@ func (m Model) View() tea.View {
 		v.AltScreen = true
 		return v
 	}
-	v := tea.NewView(lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content))
+
+	// Страховка от переполнения по ширине: любая строка обрезается до ширины
+	// окна, чтобы узкий терминал не давал переносов и «разъезжающегося» UI.
+	content = m.clipWidth(content, m.width)
+
+	// Если контент выше окна, прижимаем его к верху: иначе Center отрежет
+	// и заголовок, и футер одновременно.
+	vertAlign := lipgloss.Center
+	if lipgloss.Height(content) > m.height {
+		vertAlign = lipgloss.Top
+	}
+
+	v := tea.NewView(lipgloss.Place(m.width, m.height, lipgloss.Center, vertAlign, content))
 	v.AltScreen = true
 	return v
 }
 
+// clipWidth обрезает каждую строку блока до maxWidth видимых ячеек.
+func (m Model) clipWidth(s string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return s
+	}
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		if lipgloss.Width(line) > maxWidth {
+			lines[i] = ansi.Truncate(line, maxWidth, "")
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// availableHeight — высота, доступная контенту внутри рамки и паддинга
+// контейнера. Возвращает 0, если высота окна ещё неизвестна.
+func (m Model) availableHeight() int {
+	if m.height <= 0 {
+		return 0
+	}
+	h := m.height - containerChromeV
+	if h < 4 {
+		h = 4
+	}
+	return h
+}
+
+// renderMain собирает главный экран с учётом доступной высоты. Блоки
+// добавляются по убыванию важности; при нехватке места второстепенные
+// (прогресс, перерывы, параметры, результат) отбрасываются, чтобы
+// заголовок, hero и футер всегда оставались на экране.
 func (m Model) renderMain() string {
+	budget := m.availableHeight()
+
+	header := m.renderHeader()
+	controls := m.renderControls()
+	status := m.renderStatusMessage()
+	timer := m.renderTimerRow()
+
+	// Блоки в порядке убывания важности. Хвост отбрасывается первым,
+	// когда итоговый блок не влезает в доступную высоту.
+	tiers := [][]string{
+		// 0: полный экран
+		{m.renderHero(true), timer, m.renderBreaks(), m.renderParams(), m.renderResult()},
+		// 1: без прогресс-бара
+		{m.renderHero(false), timer, m.renderBreaks(), m.renderParams(), m.renderResult()},
+		// 2: без результата
+		{m.renderHero(false), timer, m.renderBreaks(), m.renderParams()},
+		// 3: без перерывов
+		{m.renderHero(false), timer, m.renderParams()},
+		// 4: минимум — заголовок, hero, время, футер
+		{m.renderHero(false), timer},
+	}
+
+	if budget == 0 {
+		return m.clipWidth(m.assembleMain(header, tiers[0], status, controls), m.contentWidth())
+	}
+
+	for _, tier := range tiers {
+		block := m.assembleMain(header, tier, status, controls)
+		if fits(block, budget) {
+			return m.clipWidth(block, m.contentWidth())
+		}
+	}
+	// Ничего не влезает — отдаём минимальный вариант (обрежется сверху).
+	return m.clipWidth(m.assembleMain(header, tiers[len(tiers)-1], status, controls), m.contentWidth())
+}
+
+// assembleMain склеивает главный экран из заголовка, набора блоков, статуса
+// и футера.
+func (m Model) assembleMain(header string, blocks []string, status, controls string) string {
 	var b strings.Builder
-	b.WriteString(m.renderHeader())
-	b.WriteString(m.renderHero())
-	b.WriteString(m.renderTimerRow())
-	b.WriteString(m.renderBreaks())
-	b.WriteString(m.renderParams())
-	b.WriteString(m.renderResult())
-	b.WriteString(m.renderStatusMessage())
-	b.WriteString(m.renderControls())
+	b.WriteString(header)
+	for _, blk := range blocks {
+		b.WriteString(blk)
+	}
+	b.WriteString(status)
+	b.WriteString(controls)
 	return b.String()
+}
+
+// fits сообщает, помещается ли блок в доступную высоту.
+func fits(block string, budget int) bool {
+	return lipgloss.Height(block) <= budget
+}
+
+// blockLines — сколько строк занимает блок при склейке с другими блоками.
+// Каждый перевод строки завершает ровно одну строку; висячий хвост без "\n"
+// считается отдельной строкой.
+func blockLines(s string) int {
+	if s == "" {
+		return 0
+	}
+	n := strings.Count(s, "\n")
+	if !strings.HasSuffix(s, "\n") {
+		n++
+	}
+	return n
+}
+
+// renderBox рендерит тело в рамке, отбрасывая хвостовые переводы строки, из-за
+// которых lipgloss добавляет лишнюю пустую строку внутри рамки.
+func renderBox(style lipgloss.Style, body string) string {
+	return style.Render(strings.TrimRight(body, "\n"))
+}
+
+// listWindow возвращает диапазон [start, end) видимых элементов списка так,
+// чтобы курсор был в окне, а окно не выходило за пределы доступных строк.
+// avail <= 0 означает отсутствие ограничения.
+func listWindow(total, cursor, offset, avail int) (start, end int) {
+	if total <= 0 {
+		return 0, 0
+	}
+	if avail < 1 {
+		avail = 1
+	}
+	if avail >= total {
+		return 0, total
+	}
+	if cursor < 0 {
+		cursor = 0
+	}
+	if cursor >= total {
+		cursor = total - 1
+	}
+	start = offset
+	// Держим курсор внутри окна.
+	if cursor < start {
+		start = cursor
+	}
+	if cursor >= start+avail {
+		start = cursor - avail + 1
+	}
+	if start < 0 {
+		start = 0
+	}
+	if start+avail > total {
+		start = total - avail
+	}
+	return start, start + avail
 }
 
 func (m Model) renderHeader() string {
@@ -264,35 +459,36 @@ func (m Model) renderHeader() string {
 		modeStr = m.locale.ModeInsert
 	}
 
+	clock := ""
+	if !m.currentTime.IsZero() {
+		clock = clockStyle.Render(m.currentTime.Format("15:04"))
+	}
+
+	// Фиксированная часть (логотип, режим, часы) всегда видна; имя файла
+	// получает остаток строки и обрезается при нехватке места.
+	prefix := headerStyle.Render("◉ WORK TIMER") + "  " + modeStyle.Render(modeStr)
+	suffix := ""
+	if clock != "" {
+		suffix = "  " + clock
+	}
+
 	var filePart string
 	if m.saveFile != "" {
 		dot := statusDotStyle.Render("●")
 		if m.isDirty {
 			dot = dirtyDotStyle.Render("●")
 		}
-		filePart = dot + "  " + fileNameStyle.Render(filepath.Base(m.saveFile))
+		nameAvail := m.contentWidth() - lipgloss.Width(prefix) - lipgloss.Width(suffix) - lipgloss.Width(dot) - 4
+		filePart = dot + "  " + fileNameStyle.Render(truncate(filepath.Base(m.saveFile), nameAvail))
 	} else {
 		filePart = statusBarStyle.Render(m.locale.NoFileSelected)
 	}
 
-	clock := ""
-	if !m.currentTime.IsZero() {
-		clock = clockStyle.Render(m.currentTime.Format("15:04"))
-	}
-
-	var parts []string
-	parts = append(parts,
-		headerStyle.Render("◉ WORK TIMER"),
-		"  ",
-		modeStyle.Render(modeStr),
-		"  ",
-		filePart,
-	)
+	line := prefix + "  " + filePart
 	if clock != "" {
-		parts = append(parts, "  ", clock)
+		line += suffix
 	}
-
-	return lipgloss.JoinHorizontal(lipgloss.Left, parts...) + "\n"
+	return line + "\n"
 }
 
 // renderSectionHeader рисует разделитель секции с заголовком.
@@ -336,8 +532,9 @@ func (m Model) hasTimerInput() bool {
 // renderHero — крупный блок "оставшееся время" + прогресс.
 // value = оставшееся время, bar = доля прошедшего времени рабочего окна.
 // Статус выводится отдельным бейджем, чтобы не возникало противоречия
-// "ОСТАЛОСЬ 09:00" рядом с "ГОТОВО".
-func (m Model) renderHero() string {
+// "ОСТАЛОСЬ 09:00" рядом с "ГОТОВО". withProgress=false убирает полосу
+// прогресса и лишние пустые строки — для компактного режима.
+func (m Model) renderHero(withProgress bool) string {
 	percent, _, _, ok := m.progressInfo()
 	done := m.runtimeState() == stateDone
 
@@ -351,6 +548,10 @@ func (m Model) renderHero() string {
 	label := heroLabelStyle.Render(m.locale.RemainingLabel + ":")
 	if done {
 		label = statusSuccessStyle.Bold(true).Render(m.locale.HeroDoneLabel)
+	}
+
+	if !withProgress {
+		return "\n" + label + "\n" + line + "\n"
 	}
 
 	var progress string
@@ -477,11 +678,11 @@ func (m Model) renderTimerRow() string {
 	}
 
 	row := lipgloss.JoinHorizontal(lipgloss.Left,
-		startLabel.Width(col).Render(m.locale.FieldStart),
+		labelCell(startLabel, m.locale.FieldStart, col),
 		"  ",
 		start,
 		sep,
-		paramLabelStyle.Width(col).Render(m.locale.FieldEnd),
+		labelCell(paramLabelStyle, m.locale.FieldEnd, col),
 		"  ",
 		end,
 	)
@@ -618,7 +819,7 @@ func (m Model) renderParams() string {
 		}
 		tzVal = paramValueStyle.Underline(true).Foreground(colorAccent).Render(s)
 	}
-	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Left, tzLabel.Width(col).Render(checkboxLabel(m)), "  ", tzVal) + "\n")
+	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Left, labelCell(tzLabel, checkboxLabel(m), col), "  ", tzVal) + "\n")
 
 	return b.String()
 }
@@ -639,7 +840,7 @@ func (m Model) mode2Active() bool {
 
 func (m Model) renderPairAt(label, value string, col int) string {
 	return lipgloss.JoinHorizontal(lipgloss.Left,
-		paramLabelStyle.Width(col).Render(label),
+		labelCell(paramLabelStyle, label, col),
 		"  ",
 		value,
 	)
@@ -655,7 +856,7 @@ func (m Model) renderValueFieldAt(index int, label string, input textinput.Model
 
 	if m.mode == ModeInsert && focused {
 		return lipgloss.JoinHorizontal(lipgloss.Left,
-			labelStyle.Width(col).Render(label),
+			labelCell(labelStyle, label, col),
 			"  ",
 			fieldActiveStyle.Render(input.View()),
 		)
@@ -667,7 +868,7 @@ func (m Model) renderValueFieldAt(index int, label string, input textinput.Model
 			val = offStyle.Render("▍" + m.locale.PlaceholderTime)
 		}
 		return lipgloss.JoinHorizontal(lipgloss.Left,
-			labelStyle.Width(col).Render(label),
+			labelCell(labelStyle, label, col),
 			"  ",
 			val,
 		)
@@ -686,7 +887,7 @@ func (m Model) renderValueFieldAt(index int, label string, input textinput.Model
 	}
 
 	return lipgloss.JoinHorizontal(lipgloss.Left,
-		labelStyle.Width(col).Render(label),
+		labelCell(labelStyle, label, col),
 		"  ",
 		valStyle.Render(value),
 	)
@@ -768,7 +969,7 @@ func (m Model) renderResult() string {
 // renderSummaryRow — строка label/value с общим выравниванием колонки.
 func (m Model) renderSummaryRow(label, value string, col int) string {
 	return lipgloss.JoinHorizontal(lipgloss.Left,
-		paramLabelStyle.Width(col).Render(label),
+		labelCell(paramLabelStyle, label, col),
 		"  ",
 		value,
 	)
@@ -822,7 +1023,7 @@ func (m Model) renderProgressBar(percent float64, avail int) string {
 		pct = 0
 	}
 
-	barWidth := min(max(m.containerWidth()-14, 14), 50)
+	barWidth := min(max(m.contentWidth()-8, 10), 50)
 	if avail > 0 {
 		barWidth = min(avail, barWidth)
 	}
@@ -997,23 +1198,48 @@ func formatShortDuration(d time.Duration, loc Locale) string {
 func (m Model) renderControls() string {
 	k := func(s string) string { return controlKeyStyle.Render(s) }
 	d := func(s string) string { return statusBarStyle.Render(s) }
-	sep := "   "
 	divW := m.dividerWidth()
 
 	if m.mode == ModeInsert {
 		return controlsBarStyle.Width(divW).Render(k("esc") + "  " + d(m.locale.CtrlEdit))
 	}
 
-	line := strings.Join([]string{
+	items := []string{
 		k("j/k") + " " + d(m.locale.CtrlNav),
 		k("i") + " " + d(m.locale.CtrlEdit),
 		k("s") + " " + d(m.locale.CtrlSave),
 		k("o") + " " + d(m.locale.CtrlOpen),
 		k("?") + " " + d(m.locale.CtrlHelp),
 		k("q") + " " + d(m.locale.CtrlQuit),
-	}, sep)
+	}
 
+	line := strings.Join(wrapItems(items, divW, "   "), "\n")
 	return controlsBarStyle.Width(divW).Render(line)
+}
+
+// wrapItems упаковывает элементы подсказок в строки, не превышающие width.
+// На узких терминалах футер переносится на несколько строк вместо обрезки.
+func wrapItems(items []string, width int, sep string) []string {
+	if width <= 0 {
+		return []string{strings.Join(items, sep)}
+	}
+	var lines []string
+	cur := ""
+	for _, it := range items {
+		switch {
+		case cur == "":
+			cur = it
+		case lipgloss.Width(cur)+lipgloss.Width(sep)+lipgloss.Width(it) <= width:
+			cur += sep + it
+		default:
+			lines = append(lines, cur)
+			cur = it
+		}
+	}
+	if cur != "" {
+		lines = append(lines, cur)
+	}
+	return lines
 }
 
 func (m Model) renderSavePrompt() string {
@@ -1064,37 +1290,50 @@ func (m Model) renderFileList() string {
 	if len(m.availableFiles) == 0 {
 		b.WriteString("\n  " + statusBarStyle.Render(m.locale.FileListEmpty) + "\n\n")
 		b.WriteString(statusBarStyle.Render(m.locale.FileListHintNew))
-		return promptStyle.Render(b.String())
+		return renderBox(promptStyle, b.String())
 	}
 
-	// Список файлов. Выбранный — с маркером "▸" и highlight.
-	for i, file := range m.availableFiles {
+	// Хвост экрана (после списка): отступ, статус, двухстрочный футер.
+	fk := func(s string) string { return controlKeyStyle.Render(s) }
+	fd := func(s string) string { return statusBarStyle.Render(s) }
+	var tail strings.Builder
+	if m.renaming {
+		tail.WriteString("\n" + statusBarStyle.Render(m.locale.RenamePrompt+" ") + m.renameInput.View() + "\n")
+		tail.WriteString(statusBarStyle.Render("[Enter] rename  [Esc] cancel") + "\n")
+	} else if m.confirmDelete && m.statusMessage != "" {
+		tail.WriteString("\n" + statusWarnStyle.Render(m.statusMessage) + "\n")
+	}
+	tail.WriteString("\n" + fk("j/k") + " " + fd(m.locale.CtrlNav) + "   " + fk("Enter") + " " + fd(m.locale.CtrlOpen) +
+		"   " + fk("/") + " " + fd(m.locale.CtrlSearch) + "\n")
+	tail.WriteString(fk("d") + " " + fd(m.locale.CtrlDelete) + "   " + fk("r") + " " + fd(m.locale.CtrlRename) +
+		"   " + fk("n") + " " + fd(m.locale.CtrlNew) + "   " + fk("Esc") + " " + fd(m.locale.CtrlCancel) + "\n")
+
+	// Список файлов с прокруткой: показываем только то, что влезает в высоту.
+	budget := m.availableHeight() - blockLines(b.String()) - blockLines(tail.String())
+	avail := budget
+	if len(m.availableFiles) > avail {
+		avail -= 2 // место под индикаторы ↑/↓
+	}
+	start, end := listWindow(len(m.availableFiles), m.fileListCursor, m.fileListOffset, avail)
+
+	if start > 0 {
+		b.WriteString(statusBarStyle.Render(fmt.Sprintf("  ↑ %d", start)) + "\n")
+	}
+	for i := start; i < end; i++ {
+		file := m.availableFiles[i]
 		if i == m.fileListCursor {
 			b.WriteString(fileListItemActiveStyle.Render("▸ "+file) + "\n")
 		} else {
 			b.WriteString(fileListItemStyle.Render("  "+file) + "\n")
 		}
 	}
-
-	b.WriteString("\n")
-
-	// Состояние: переименование / подтверждение удаления.
-	if m.renaming {
-		b.WriteString(statusBarStyle.Render(m.locale.RenamePrompt+" ") + m.renameInput.View() + "\n")
-		b.WriteString(statusBarStyle.Render("[Enter] rename  [Esc] cancel") + "\n")
-	} else if m.confirmDelete && m.statusMessage != "" {
-		b.WriteString(statusWarnStyle.Render(m.statusMessage) + "\n")
+	if end < len(m.availableFiles) {
+		b.WriteString(statusBarStyle.Render(fmt.Sprintf("  ↓ %d", len(m.availableFiles)-end)) + "\n")
 	}
 
-	// Footer сгруппирован в две строки, клавиши выделены.
-	fk := func(s string) string { return controlKeyStyle.Render(s) }
-	fd := func(s string) string { return statusBarStyle.Render(s) }
-	b.WriteString("\n" + fk("j/k") + " " + fd(m.locale.CtrlNav) + "   " + fk("Enter") + " " + fd(m.locale.CtrlOpen) +
-		"   " + fk("/") + " " + fd(m.locale.CtrlSearch) + "\n")
-	b.WriteString(fk("d") + " " + fd(m.locale.CtrlDelete) + "   " + fk("r") + " " + fd(m.locale.CtrlRename) +
-		"   " + fk("n") + " " + fd(m.locale.CtrlNew) + "   " + fk("Esc") + " " + fd(m.locale.CtrlCancel) + "\n")
+	b.WriteString(tail.String())
 
-	return promptStyle.Render(b.String())
+	return renderBox(promptStyle, b.String())
 }
 
 func (m Model) renderPresetList() string {
@@ -1104,7 +1343,20 @@ func (m Model) renderPresetList() string {
 	if len(m.config.Breaks) == 0 {
 		b.WriteString("\n  " + statusBarStyle.Render(m.locale.PresetEmpty) + "\n\n")
 	} else {
-		for i, preset := range m.config.Breaks {
+		tail := "\n" + sectionDividerStyle.Render(strings.Repeat("─", m.dividerWidth())) + "\n\n" +
+			statusBarStyle.Render(m.locale.PresetHint) + "\n"
+		budget := m.availableHeight() - blockLines(b.String()) - blockLines(tail)
+		avail := budget
+		if len(m.config.Breaks) > avail {
+			avail -= 2
+		}
+		start, end := listWindow(len(m.config.Breaks), m.presetCursor, m.presetOffset, avail)
+
+		if start > 0 {
+			b.WriteString(statusBarStyle.Render(fmt.Sprintf("  ↑ %d", start)) + "\n")
+		}
+		for i := start; i < end; i++ {
+			preset := m.config.Breaks[i]
 			label := fmt.Sprintf("%s  (%s – %s)", preset.Name, preset.From, preset.To)
 			if i == m.presetCursor {
 				b.WriteString(fileListItemActiveStyle.Render("▸ "+label) + "\n")
@@ -1112,13 +1364,17 @@ func (m Model) renderPresetList() string {
 				b.WriteString(fileListItemStyle.Render("  "+label) + "\n")
 			}
 		}
-		b.WriteString("\n")
+		if end < len(m.config.Breaks) {
+			b.WriteString(statusBarStyle.Render(fmt.Sprintf("  ↓ %d", len(m.config.Breaks)-end)) + "\n")
+		}
+		b.WriteString(tail)
+		return renderBox(promptStyle, b.String())
 	}
 
-	divider := sectionDividerStyle.Render(strings.Repeat("─", 40))
+	divider := sectionDividerStyle.Render(strings.Repeat("─", m.dividerWidth()))
 	b.WriteString(divider + "\n\n")
 	b.WriteString(statusBarStyle.Render(m.locale.PresetHint))
-	return promptStyle.Render(b.String())
+	return renderBox(promptStyle, b.String())
 }
 
 func (m Model) renderHistory() string {
@@ -1128,7 +1384,7 @@ func (m Model) renderHistory() string {
 	if len(m.historyEntries) == 0 {
 		b.WriteString("\n  " + statusBarStyle.Render(m.locale.HistoryEmpty) + "\n\n")
 		b.WriteString(m.historyFooter())
-		return promptStyle.Render(b.String())
+		return renderBox(promptStyle, b.String())
 	}
 
 	// Список записей в том же стиле, что и список файлов: маркер "▸" у
@@ -1144,7 +1400,20 @@ func (m Model) renderHistory() string {
 	b.WriteString(statusBarStyle.Render("  "+headerLine) + "\n")
 	b.WriteString(statusBarStyle.Render("  "+strings.Repeat("─", lipgloss.Width(headerLine))) + "\n")
 
-	for i, e := range m.historyEntries {
+	// Прокрутка: видимое окно записей зависит от высоты терминала.
+	tail := m.historyFooter()
+	budget := m.availableHeight() - blockLines(b.String()) - blockLines(tail)
+	avail := budget
+	if len(m.historyEntries) > avail {
+		avail -= 2
+	}
+	start, end := listWindow(len(m.historyEntries), m.historyCursor, m.historyOffset, avail)
+
+	if start > 0 {
+		b.WriteString(statusBarStyle.Render(fmt.Sprintf("  ↑ %d", start)) + "\n")
+	}
+	for i := start; i < end; i++ {
+		e := m.historyEntries[i]
 		startStr := e.StartTime
 		if startStr == "" {
 			startStr = "—:—"
@@ -1172,11 +1441,13 @@ func (m Model) renderHistory() string {
 			b.WriteString(fileListItemStyle.Render("  "+line) + "\n")
 		}
 	}
+	if end < len(m.historyEntries) {
+		b.WriteString(statusBarStyle.Render(fmt.Sprintf("  ↓ %d", len(m.historyEntries)-end)) + "\n")
+	}
 
-	b.WriteString("\n")
-	b.WriteString(m.historyFooter())
+	b.WriteString(tail)
 
-	return promptStyle.Render(b.String())
+	return renderBox(promptStyle, b.String())
 }
 
 // historyFooter — двухстрочный footer в стиле file picker.
@@ -1241,7 +1512,28 @@ func (m Model) renderHelp() string {
 	b.WriteString(fd(m.locale.HelpConfig+": ") + fk(ConfigPath) + "\n")
 	b.WriteString(fd(m.locale.HelpFolder+": ") + fk(DefaultWorkDir) + "\n")
 
-	return helpBoxStyle.Render(b.String())
+	// Прокрутка: на низком терминале показываем только часть строк справки.
+	body := b.String()
+	avail := m.availableHeight()
+	if avail > 0 {
+		lines := strings.Split(strings.TrimRight(body, "\n"), "\n")
+		if len(lines) > avail {
+			offset := m.helpOffset
+			if offset < 0 {
+				offset = 0
+			}
+			if offset > len(lines)-avail {
+				offset = len(lines) - avail
+			}
+			lines = lines[offset:]
+			if len(lines) > avail {
+				lines = lines[:avail]
+			}
+			body = strings.Join(lines, "\n") + "\n"
+		}
+	}
+
+	return renderBox(helpBoxStyle, body)
 }
 
 // isInvalidTimeValue возвращает true если строка непустая и не является

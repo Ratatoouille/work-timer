@@ -95,13 +95,17 @@ type Model struct {
 	availableFiles  []string
 	allFiles        []string // все файлы для поиска
 	fileListCursor  int
+	fileListOffset  int
 	fileSearchInput textinput.Model
 	confirmDelete   bool
 	renameInput     textinput.Model
 	renaming        bool
 	presetCursor    int
+	presetOffset    int
 	historyEntries  []HistoryEntry
 	historyCursor   int
+	historyOffset   int
+	helpOffset      int
 
 	// Calculation results
 	result       string
@@ -301,6 +305,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "?":
+			if m.helpState == HelpHidden {
+				m.helpOffset = 0
+			}
 			m.helpState = toggleHelpState(m.helpState)
 			return m, nil
 
@@ -317,8 +324,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// --- Help screen: eat all other keys ------------------------------------
+	// --- Help screen: прокрутка, остальные клавиши игнорируются --------------
 	if m.helpState == HelpVisible {
+		switch keyMsg.String() {
+		case "j", "down":
+			m.helpOffset++
+		case "k", "up":
+			if m.helpOffset > 0 {
+				m.helpOffset--
+			}
+		}
 		return m, nil
 	}
 
@@ -377,6 +392,7 @@ func (m Model) updateNormalMode(msg tea.KeyMsg) (Model, tea.Cmd) {
 		if len(m.config.Breaks) > 0 {
 			m.mode = ModePresetList
 			m.presetCursor = 0
+			m.presetOffset = 0
 		}
 
 	case "H":
@@ -605,6 +621,7 @@ func (m Model) updateFileList(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.fileSearchInput, cmd = m.fileSearchInput.Update(msg)
 			m.filterFiles()
 			m.fileListCursor = 0
+			m.fileListOffset = 0
 			return m, cmd
 		}
 	}
@@ -703,6 +720,7 @@ func (m *Model) addBreakPreset(preset BreakPreset) {
 func (m *Model) enterHistoryMode() {
 	m.mode = ModeHistory
 	m.historyCursor = 0
+	m.historyOffset = 0
 	histStorage := NewHistoryStorage(m.workDir)
 	entries, err := histStorage.Load()
 	if err != nil {
@@ -791,6 +809,7 @@ func (m *Model) enterSaveMode() {
 func (m *Model) enterFileListMode() {
 	m.mode = ModeFileList
 	m.fileListCursor = 0
+	m.fileListOffset = 0
 	m.statusMessage = ""
 	m.loadAvailableFiles()
 }
