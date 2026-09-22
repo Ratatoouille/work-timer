@@ -37,6 +37,10 @@ work-timer/
 ├── history.go        # history.json journal of past work days (append/upsert by date, sorted desc)
 ├── config.go         # TOML config loading, defaults, BreakPreset, timezone helpers
 ├── locale.go         # i18n: Russian/English UI strings (Locale struct, not external files)
+├── tray.go           # TrayManager/TrayState — platform-agnostic tray logic + formatting
+├── tray_linux.go     # Linux tray: direct DBus StatusNotifierItem via godbus
+├── tray_stub.go      # Non-Linux no-op startTray
+├── icon.go           # Config color parsing (ANSI 0-255 / hex)
 └── *_test.go         # Unit tests for each module (table-driven)
 ```
 
@@ -119,6 +123,8 @@ Top-level keys:
 - `language` — `"ru"` or `"en"`.
 - `input_timezone` — IANA tz for input times (start/breaks).
 - `timezone` — Target tz for result conversion (empty = no conversion).
+
+`[tray]` — `enabled` (bool, default false) toggles the Linux tray indicator.
 
 `[[breaks]]` array — break presets, selected via `p` key in Normal mode:
 ```toml
@@ -228,11 +234,16 @@ Tests use real temp directories for storage/config tests. No external mocking fr
 
 10. **v2 import paths**: Dependencies use `charm.land/bubbletea/v2`, `charm.land/bubbles/v2`, `charm.land/lipgloss/v2` (not the old `github.com/charmbracelet/...` paths). The module path itself is `github.com/Ratatoouille/work-timer/v2`.
 
+11. **Tray init order**: The tray must be attached to the `Model` *before* `tea.NewProgram(m)` is called — `tea.NewProgram` copies the model, so a tray assigned afterwards would update a detached copy and never render (`main.go`).
+
+12. **Linux tray label**: The tray icon is a transparent 1x1 pixmap; the time is exposed via the `XAyatanaLabel` SNI property, which the GNOME `ubuntu-appindicators` extension renders as a native `St.Label`. `fyne.io/systray` cannot set that property, hence the direct `godbus` implementation in `tray_linux.go`. There is no context menu.
+
 ## Key Dependencies
 
 - `charm.land/bubbletea/v2` — TUI framework (Elm architecture)
 - `charm.land/bubbles/v2` — `textinput` component used for all editable fields
 - `charm.land/lipgloss/v2` — Styling / layout
 - `github.com/BurntSushi/toml` — Config parsing
+- `github.com/godbus/dbus/v5` — Linux tray (StatusNotifierItem) over DBus
 
 Go 1.25+ required (see `go.mod`).
