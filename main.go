@@ -35,8 +35,11 @@ func main() {
 	m := NewModel(saveFile)
 
 	if m.config.Tray.Enabled {
-		if tray := startTray(m.config, m.locale); tray != nil {
+		tray, blocked := startTray(m.config, m.locale)
+		if tray != nil {
 			m.tray = tray
+		} else if blocked {
+			m.setStatus(m.locale.TrayAlreadyRunning, StatusWarn)
 		}
 	}
 

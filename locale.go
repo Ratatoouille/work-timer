@@ -119,6 +119,7 @@ type Locale struct {
 	TrayDone      string // "рабочий день окончен"
 	TrayTooltip   string // "%s\n%s"
 	TrayQuit      string // "Выход"
+	TrayAlreadyRunning string // трей занят другим экземпляром
 
 	// --- Ошибки калькулятора ---
 	ErrInvalidStartTime    string
@@ -272,6 +273,7 @@ var localeRU = Locale{
 	TrayDone:      "рабочий день окончен",
 	TrayTooltip:   "%s\n%s",
 	TrayQuit:      "Выход",
+	TrayAlreadyRunning: "Трей уже запущен другим экземпляром",
 
 	ErrInvalidStartTime:    "неверное время начала",
 	ErrInvalidWorked:       "неверный формат 'отработано'",
@@ -421,6 +423,7 @@ var localeEN = Locale{
 	TrayDone:      "work day complete",
 	TrayTooltip:   "%s\n%s",
 	TrayQuit:      "Quit",
+	TrayAlreadyRunning: "Tray is already running in another instance",
 
 	ErrInvalidStartTime:    "invalid start time",
 	ErrInvalidWorked:       "invalid format for 'worked'",
