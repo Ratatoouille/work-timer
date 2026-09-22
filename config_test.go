@@ -27,9 +27,6 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.UI.LabelWidth != 22 {
 		t.Errorf("LabelWidth = %v, want 22", cfg.UI.LabelWidth)
 	}
-	if cfg.UI.Colors.Accent != "12" {
-		t.Errorf("Accent = %v, want 12", cfg.UI.Colors.Accent)
-	}
 	if cfg.UI.Timeouts.Clipboard != 2 {
 		t.Errorf("Clipboard timeout = %v, want 2", cfg.UI.Timeouts.Clipboard)
 	}
@@ -90,12 +87,6 @@ timezone        = "Asia/Krasnoyarsk"
 [ui]
 label_width = 30
 
-[ui.colors]
-accent = "9"
-result = "10"
-break  = "11"
-warn   = "12"
-
 [ui.timeouts]
 clipboard = 5
 status    = 6
@@ -122,9 +113,6 @@ warning   = 7
 	}
 	if cfg.UI.LabelWidth != 30 {
 		t.Errorf("LabelWidth = %v, want 30", cfg.UI.LabelWidth)
-	}
-	if cfg.UI.Colors.Accent != "9" {
-		t.Errorf("Accent = %v, want 9", cfg.UI.Colors.Accent)
 	}
 	if cfg.UI.Timeouts.Clipboard != 5 {
 		t.Errorf("Clipboard = %v, want 5", cfg.UI.Timeouts.Clipboard)
@@ -176,9 +164,6 @@ func TestLoadConfigFillsZeroValues(t *testing.T) {
 
 	if cfg.UI.LabelWidth != 22 {
 		t.Errorf("LabelWidth should fallback to 22, got %v", cfg.UI.LabelWidth)
-	}
-	if cfg.UI.Colors.Accent != "12" {
-		t.Errorf("Accent should fallback to 12, got %v", cfg.UI.Colors.Accent)
 	}
 	if cfg.UI.Timeouts.Status != 3 {
 		t.Errorf("Status timeout should fallback to 3, got %v", cfg.UI.Timeouts.Status)

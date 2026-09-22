@@ -35,15 +35,7 @@ type BreakPreset struct {
 
 type ConfigUI struct {
 	LabelWidth int            `toml:"label_width"`
-	Colors     ConfigColors   `toml:"colors"`
 	Timeouts   ConfigTimeouts `toml:"timeouts"`
-}
-
-type ConfigColors struct {
-	Accent string `toml:"accent"`
-	Result string `toml:"result"`
-	Break  string `toml:"break"`
-	Warn   string `toml:"warn"`
 }
 
 type ConfigTimeouts struct {
@@ -72,12 +64,6 @@ func defaultConfig() Config {
 		},
 		UI: ConfigUI{
 			LabelWidth: 22,
-			Colors: ConfigColors{
-				Accent: "12",
-				Result: "14",
-				Break:  "13",
-				Warn:   "11",
-			},
 			Timeouts: ConfigTimeouts{
 				Clipboard: 2,
 				Status:    3,
@@ -111,18 +97,6 @@ func LoadConfig() Config {
 	def := defaultConfig()
 	if cfg.UI.LabelWidth == 0 {
 		cfg.UI.LabelWidth = def.UI.LabelWidth
-	}
-	if cfg.UI.Colors.Accent == "" {
-		cfg.UI.Colors.Accent = def.UI.Colors.Accent
-	}
-	if cfg.UI.Colors.Result == "" {
-		cfg.UI.Colors.Result = def.UI.Colors.Result
-	}
-	if cfg.UI.Colors.Break == "" {
-		cfg.UI.Colors.Break = def.UI.Colors.Break
-	}
-	if cfg.UI.Colors.Warn == "" {
-		cfg.UI.Colors.Warn = def.UI.Colors.Warn
 	}
 	if cfg.UI.Timeouts.Clipboard == 0 {
 		cfg.UI.Timeouts.Clipboard = def.UI.Timeouts.Clipboard
@@ -210,13 +184,6 @@ enabled = false
 [ui]
 # Ширина колонки лейблов (символов)
 label_width = 22
-
-[ui.colors]
-# Цвета задаются номерами ANSI (0–255) или hex "#RRGGBB"
-accent = "12"   # синий    — заголовки, рамки активного поля
-result = "14"   # cyan     — блок результата
-break  = "13"   # маджента — секция перерывов
-warn   = "11"   # жёлтый  — предупреждения, грязная точка
 
 [ui.timeouts]
 # Время (секунды) до автоматического скрытия статусных сообщений

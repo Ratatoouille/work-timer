@@ -7,8 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"image/color"
-
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -28,14 +26,16 @@ const containerChromeV = 4
 // всё равно не должен выходить за границы окна.
 const minContainerWidth = 34
 
-// Стили инициализируются из конфига через initStyles().
+// Цвета берутся из базовой ANSI-палитры терминала, поэтому следуют теме
+// пользователя, а не фиксированным индексам. Синий слот (color4) в разных
+// темах может сливаться с фоном, поэтому как акцент он не используется:
+// фокус показывается жирным/подчёркиванием, а не цветом.
 var (
-	colorAccent  color.Color
-	colorMuted   = lipgloss.Color("8")
-	colorSuccess = lipgloss.Color("10")
-	colorError   = lipgloss.Color("9")
-	colorResult  color.Color
-	colorWarn    color.Color
+	colorMuted   = lipgloss.BrightBlack
+	colorSuccess = lipgloss.Green
+	colorError   = lipgloss.Red
+	colorResult  = lipgloss.Cyan
+	colorWarn    = lipgloss.Yellow
 
 	fieldBoxStyle    lipgloss.Style
 	fieldActiveStyle lipgloss.Style
@@ -81,14 +81,10 @@ var (
 
 // initStyles вызывается из NewModel после загрузки конфига.
 func initStyles(cfg Config) {
-	colorAccent = lipgloss.Color(cfg.UI.Colors.Accent)
-	colorResult = lipgloss.Color(cfg.UI.Colors.Result)
-	colorWarn = lipgloss.Color(cfg.UI.Colors.Warn)
-
 	fieldBoxStyle = lipgloss.NewStyle().Padding(0, 1)
 	fieldActiveStyle = fieldBoxStyle.
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(colorAccent).
+		BorderForeground(colorWarn).
 		Padding(0, 1)
 
 	containerStyle = lipgloss.NewStyle().
@@ -98,7 +94,7 @@ func initStyles(cfg Config) {
 
 	headerStyle = lipgloss.NewStyle().
 		Bold(true).
-		Foreground(colorAccent)
+		Foreground(lipgloss.White)
 
 	modeNormalStyle = lipgloss.NewStyle().
 		Bold(true).
@@ -106,15 +102,15 @@ func initStyles(cfg Config) {
 
 	modeInsertStyle = lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("0")).
+		Foreground(lipgloss.Black).
 		Background(colorWarn).
 		Padding(0, 1)
 
 	statusBarStyle = lipgloss.NewStyle().Foreground(colorMuted)
-	clockStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15"))
+	clockStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.BrightWhite)
 
 	fileNameStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("15")).
+		Foreground(lipgloss.BrightWhite).
 		Bold(true)
 
 	dirtyDotStyle = lipgloss.NewStyle().Foreground(colorWarn)
@@ -122,27 +118,27 @@ func initStyles(cfg Config) {
 
 	sectionBreakHeaderStyle = lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("15"))
+		Foreground(lipgloss.BrightWhite)
 
 	sectionDividerStyle = lipgloss.NewStyle().Foreground(colorMuted)
 
 	// Крупный акцентный блок "оставшееся время"
 	heroLabelStyle = lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("7"))
+		Foreground(lipgloss.White)
 	heroValueStyle = lipgloss.NewStyle().
 		Bold(true).
-		Foreground(colorAccent)
+		Foreground(colorResult)
 	timerStateStyle = lipgloss.NewStyle().
 		Bold(true).
-		Foreground(colorAccent)
+		Foreground(colorSuccess)
 
 	// Вторичные label/value пары
 	paramLabelStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("7"))
+		Foreground(lipgloss.White)
 	paramValueStyle = lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("15"))
+		Foreground(lipgloss.BrightWhite)
 
 	breakTimeStyle = lipgloss.NewStyle().
 		Bold(true)
@@ -167,22 +163,21 @@ func initStyles(cfg Config) {
 		PaddingTop(1)
 
 	controlKeyStyle = lipgloss.NewStyle().
-		Foreground(colorAccent).
+		Foreground(lipgloss.BrightWhite).
 		Bold(true)
 
 	promptStyle = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		Padding(1, 2).
-		BorderForeground(colorAccent)
+		BorderForeground(colorMuted)
 
 	fileListItemStyle = lipgloss.NewStyle().
 		Padding(0, 2).
-		Foreground(lipgloss.Color("7"))
+		Foreground(lipgloss.White)
 
 	fileListItemActiveStyle = lipgloss.NewStyle().
 		Padding(0, 2).
-		Background(lipgloss.Color("4")).
-		Foreground(lipgloss.Color("15")).
+		Reverse(true).
 		Bold(true)
 
 	helpBoxStyle = lipgloss.NewStyle().
@@ -668,7 +663,7 @@ func (m Model) renderTimerRow() string {
 	} else if m.startTime.Value() != "" {
 		start = paramValueStyle.Render(m.startTime.Value())
 		if m.cursor == FieldStartTime {
-			start = paramValueStyle.Underline(true).Foreground(colorAccent).Render(m.startTime.Value())
+			start = paramValueStyle.Underline(true).Render(m.startTime.Value())
 		}
 	} else {
 		start = statusBarStyle.Render("—:—")
@@ -734,7 +729,7 @@ func (m Model) renderBreakRow(idx, baseIndex int, br Break) string {
 	if from != "" {
 		st := breakTimeStyle
 		if focusedFrom {
-			st = st.Bold(true).Underline(true).Foreground(colorAccent)
+			st = st.Bold(true).Underline(true)
 		}
 		dispFrom = st.Render(from)
 	} else if focusedFrom {
@@ -744,7 +739,7 @@ func (m Model) renderBreakRow(idx, baseIndex int, br Break) string {
 	if to != "" {
 		st := breakTimeStyle
 		if focusedTo {
-			st = st.Bold(true).Underline(true).Foreground(colorAccent)
+			st = st.Bold(true).Underline(true)
 		}
 		dispTo = st.Render(to)
 	} else if focusedTo {
@@ -817,7 +812,7 @@ func (m Model) renderParams() string {
 		if m.addTZ {
 			s = "Да"
 		}
-		tzVal = paramValueStyle.Underline(true).Foreground(colorAccent).Render(s)
+		tzVal = paramValueStyle.Underline(true).Render(s)
 	}
 	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Left, labelCell(tzLabel, checkboxLabel(m), col), "  ", tzVal) + "\n")
 
@@ -880,7 +875,7 @@ func (m Model) renderValueFieldAt(index int, label string, input textinput.Model
 	}
 	valStyle := paramValueStyle
 	if focused {
-		valStyle = paramValueStyle.Underline(true).Foreground(colorAccent)
+		valStyle = paramValueStyle.Underline(true)
 	}
 	if invalid {
 		valStyle = statusErrorStyle
@@ -896,7 +891,7 @@ func (m Model) renderValueFieldAt(index int, label string, input textinput.Model
 func (m Model) valueLabelStyle(focused bool) lipgloss.Style {
 	s := paramLabelStyle
 	if focused {
-		s = s.Bold(true).Foreground(colorAccent)
+		s = s.Bold(true).Underline(true)
 	}
 	return s
 }
@@ -1039,7 +1034,7 @@ func (m Model) renderProgressBar(percent float64, avail int) string {
 	pctText := fmt.Sprintf("%.0f%%", pct*100)
 
 	bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
-	return lipgloss.NewStyle().Foreground(colorAccent).Render(bar) + " " + statusBarStyle.Render(pctText)
+	return lipgloss.NewStyle().Foreground(colorResult).Render(bar) + " " + statusBarStyle.Render(pctText)
 }
 
 // renderProgressTimeline — прогресс-бар рабочего дня. Время начала/окончания

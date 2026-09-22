@@ -136,9 +136,9 @@ to = "13:00"
 
 `[quick_inputs]` map — keys `1`-`9` insert a value into the current field in Normal mode.
 
-`[ui.colors]` — `accent`, `result`, `break`, `warn`; values are ANSI 0-255 or hex `#RRGGBB`. Applied via `initStyles()`.
-
 `[ui.timeouts]` — `clipboard`, `status`, `warning` (seconds).
+
+Colors are not configurable: styles in `view.go` use the terminal's base ANSI palette (`lipgloss.Blue`, `BrightBlack`, etc.), so they follow the user's theme.
 
 Config defaults: zero values are filled from defaults after TOML decode (config.go:83-118). Do not rely on a key being present.
 
