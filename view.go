@@ -512,14 +512,21 @@ func (m Model) renderBreakRow(idx, baseIndex int, br Break) string {
 
 	// В Insert-режиме фокусируемое поле перерыва показываем как textinput.
 	// JoinHorizontal выравнивает многострочную обводку поля по левому краю,
-	// чтобы отступ "  " применялся ко всем строкам рамки.
+	// чтобы отступ "  " применялся ко всем строкам рамки. Незафокусированное
+	// поле продолжаем показывать как значение, а не заглушку.
 	if m.mode == ModeInsert && (focusedFrom || focusedTo) {
+		renderOther := func(val string) string {
+			if val != "" {
+				return breakTimeStyle.Render(val)
+			}
+			return offStyle.Render("—:—")
+		}
 		if focusedFrom {
 			return lipgloss.JoinHorizontal(lipgloss.Left, "  ",
-				fieldActiveStyle.Render(br.from.View()), "  ", offStyle.Render("—:—"))
+				fieldActiveStyle.Render(br.from.View()), "  ", renderOther(to))
 		}
 		return lipgloss.JoinHorizontal(lipgloss.Left, "  ",
-			offStyle.Render("—:—"), "  ", fieldActiveStyle.Render(br.to.View()))
+			renderOther(from), "  ", fieldActiveStyle.Render(br.to.View()))
 	}
 
 	dispFrom := offStyle.Render("—:—")
