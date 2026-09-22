@@ -102,6 +102,7 @@ func TestLocaleAllFieldsNonEmpty(t *testing.T) {
 			"TrayDone":             loc.TrayDone,
 			"TrayTooltip":          loc.TrayTooltip,
 			"TrayQuit":             loc.TrayQuit,
+			"TrayAlreadyRunning":   loc.TrayAlreadyRunning,
 		}
 
 		for field, value := range fields {

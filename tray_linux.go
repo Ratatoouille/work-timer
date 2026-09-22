@@ -3,6 +3,8 @@
 package main
 
 import (
+	"strings"
+
 	"github.com/godbus/dbus/v5"
 	"github.com/godbus/dbus/v5/introspect"
 	"github.com/godbus/dbus/v5/prop"
@@ -13,6 +15,11 @@ const (
 	sniPath     = dbus.ObjectPath("/StatusNotifierItem")
 	watcherDest = "org.kde.StatusNotifierWatcher"
 	watcherPath = dbus.ObjectPath("/StatusNotifierWatcher")
+
+	// trayLockName — well-known имя на session bus, которое захватывает экземпляр,
+	// владеющий треем. Второй экземпляр не сможет его получить и не будет
+	// добавлять свою метку в трей.
+	trayLockName = "dev.ratatoouille.work-timer"
 )
 
 // linuxTrayBackend реализует trayBackend через собственный DBus
@@ -23,7 +30,8 @@ type linuxTrayBackend struct {
 	loc     Locale
 	ready   chan struct{}
 	stateCh chan trayRender
-	done    chan struct{}
+	quit    chan struct{} // закрывается Quit — просьба остановить цикл
+	stopped chan struct{} // закрывается run по завершении
 	conn    *dbus.Conn
 	props   *prop.Properties
 }
@@ -48,19 +56,76 @@ type trayTooltip struct {
 	V3 string
 }
 
-// startTray запускает трей в отдельной горутине. Возвращает nil, если трей
-// недоступен (в этом случае приложение продолжает работать без него).
-func startTray(cfg Config, loc Locale) *TrayManager {
+// startTray запускает трей. Возвращает (nil, false), если трей недоступен
+// (приложение продолжает работать без него), и (nil, true), если трей уже
+// занят другим экземпляром work-timer.
+func startTray(cfg Config, loc Locale) (*TrayManager, bool) {
+	conn, err := dbus.ConnectSessionBus()
+	if err != nil {
+		return nil, false
+	}
+
+	// Проверяем, не зарегистрирован ли уже SNI-элемент work-timer (ловит в том
+	// числе экземпляры, запущенные до появления блокировки по имени).
+	if hasExistingTray(conn) {
+		_ = conn.Close()
+		return nil, true
+	}
+
+	// Захватываем well-known имя — атомарная защита от одновременного старта
+	// двух экземпляров.
+	reply, err := conn.RequestName(trayLockName, dbus.NameFlagDoNotQueue)
+	if err != nil || reply != dbus.RequestNameReplyPrimaryOwner {
+		_ = conn.Close()
+		return nil, true
+	}
+
 	backend := &linuxTrayBackend{
 		loc:     loc,
 		ready:   make(chan struct{}),
 		stateCh: make(chan trayRender, 8),
-		done:    make(chan struct{}),
+		quit:    make(chan struct{}),
+		stopped: make(chan struct{}),
+		conn:    conn,
 	}
 
 	go backend.run()
 
-	return NewTrayManager(backend, loc)
+	return NewTrayManager(backend, loc), false
+}
+
+// hasExistingTray проверяет, зарегистрирован ли в StatusNotifierWatcher элемент
+// с Id "work-timer". Элементы приходят в виде "servicename@/StatusNotifierItem";
+// путь по умолчанию — /StatusNotifierItem.
+func hasExistingTray(conn *dbus.Conn) bool {
+	watcher := conn.Object(watcherDest, watcherPath)
+	v, err := watcher.GetProperty("org.kde.StatusNotifierWatcher.RegisteredStatusNotifierItems")
+	if err != nil {
+		return false
+	}
+	items, ok := v.Value().([]string)
+	if !ok {
+		return false
+	}
+
+	for _, item := range items {
+		service, path := item, string(sniPath)
+		if at := strings.IndexByte(item, '@'); at >= 0 {
+			service = item[:at]
+			if p := item[at+1:]; p != "" {
+				path = p
+			}
+		}
+		idv, err := conn.Object(service, dbus.ObjectPath(path)).
+			GetProperty("org.kde.StatusNotifierItem.Id")
+		if err != nil {
+			continue
+		}
+		if id, ok := idv.Value().(string); ok && id == "work-timer" {
+			return true
+		}
+	}
+	return false
 }
 
 // transparentPixmap — прозрачная иконка 1x1 в формате ARGB (как ждёт SNI).
@@ -69,13 +134,9 @@ func transparentPixmap() []PX {
 }
 
 func (b *linuxTrayBackend) run() {
-	defer close(b.done)
+	defer close(b.stopped)
 
-	conn, err := dbus.ConnectSessionBus()
-	if err != nil {
-		return
-	}
-	b.conn = conn
+	conn := b.conn
 	defer func() { _ = conn.Close() }()
 
 	propsSpec := map[string]map[string]*prop.Prop{
@@ -115,7 +176,7 @@ func (b *linuxTrayBackend) run() {
 
 	for {
 		select {
-		case <-b.done:
+		case <-b.quit:
 			return
 		case r := <-b.stateCh:
 			b.apply(r)
@@ -140,7 +201,7 @@ func (b *linuxTrayBackend) apply(r trayRender) {
 func (b *linuxTrayBackend) Apply(label, tooltip string, dayEnded bool) {
 	select {
 	case <-b.ready:
-	case <-b.done:
+	case <-b.stopped:
 		return
 	}
 	select {
@@ -152,12 +213,12 @@ func (b *linuxTrayBackend) Apply(label, tooltip string, dayEnded bool) {
 // Quit реализует trayBackend.
 func (b *linuxTrayBackend) Quit() {
 	select {
-	case <-b.done:
+	case <-b.stopped:
 		return
 	default:
 	}
-	_ = b.conn.Close()
-	<-b.done
+	close(b.quit)
+	<-b.stopped
 }
 
 // sniObject реализует методы org.kde.StatusNotifierItem.
